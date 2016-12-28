@@ -1,0 +1,3 @@
+target/release/beamium=/usr/bin/
+packages/deb/config.yaml=/etc/beamium/config.yaml
+packages/deb/logrotate=/etc/logrotate.d/beamium
