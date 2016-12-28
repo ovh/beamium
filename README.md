@@ -58,13 +58,13 @@ labels: # Labels definitions (Optional)
 Beamium can be customized through parameters. See available parameters bellow:
 ``` yaml
 parameters: # Parameters definitions (Optional)
-  source_dir: sources # Beamer data source directory                    (Optional, default: sources)
-  sink_dir: sinks       # Beamer data sink directory                    (Optional, default: sinks)
-  scan_period: 1000     # Delay(ms) between source/sink scan            (Optional, default: 1000)
-  batch_count: 250      # Maximum number of files to process in a batch (Optional, default: 250)
-  batch_size: 200000    # Maximum batch size                            (Optional, default: 250)
-  log_file: beamium.log # Log file                                      (Optional, default: beamium.log)
-  log_level: 4          # Log level                                     (Optional, default: info)
+  source-dir: sources # Beamer data source directory                    (Optional, default: sources)
+  sink-dir: sinks       # Beamer data sink directory                    (Optional, default: sinks)
+  scan-period: 1000     # Delay(ms) between source/sink scan            (Optional, default: 1000)
+  batch-count: 250      # Maximum number of files to process in a batch (Optional, default: 250)
+  batch-size: 200000    # Maximum batch size                            (Optional, default: 250)
+  log-file: beamium.log # Log file                                      (Optional, default: beamium.log)
+  log-level: 4          # Log level                                     (Optional, default: info)
 ```
 
 ## Contributing
