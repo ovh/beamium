@@ -166,10 +166,6 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
         try!(load_path(config_path, &mut config));
     }
 
-    if config.sinks.is_empty() {
-        return Err("no sinks found. Do you have a config file?".into());
-    }
-
     Ok(config)
 }
 

@@ -3,7 +3,6 @@
 //! Beamium scrap promotheus endpoint and forward metrics to Warp10.
 extern crate clap;
 extern crate yaml_rust;
-extern crate chan_signal;
 extern crate time;
 extern crate hyper;
 extern crate cast;
@@ -15,13 +14,15 @@ extern crate slog_scope;
 extern crate slog_term;
 extern crate slog_stream;
 extern crate slog_json;
+extern crate nix;
 
 use clap::App;
 use std::thread;
-use chan_signal::Signal;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::fs;
+use nix::sys::signal;
+use std::time::Duration;
 
 mod config;
 mod source;
@@ -29,8 +30,23 @@ mod router;
 mod sink;
 mod log;
 
+static mut SIGINT: bool = false;
+
+extern "C" fn handle_sigint(_: i32) {
+    unsafe {
+        SIGINT = true;
+    }
+}
+
 /// Main loop.
 fn main() {
+    unsafe {
+        let sig_action = signal::SigAction::new(signal::SigHandler::Handler(handle_sigint),
+                                                signal::SaFlags::empty(),
+                                                signal::SigSet::empty());
+        signal::sigaction(signal::SIGINT, &sig_action).unwrap();
+    }
+
     // Setup a bare logger
     log::bootstrap();
 
@@ -81,7 +97,7 @@ fn main() {
     }
 
     // Synchronisation stuff
-    let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
+    // let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
     let sigint = Arc::new(AtomicBool::new(false));
     let mut handles = Vec::with_capacity(config.sources.len() + 1 + config.sinks.len());
 
@@ -119,8 +135,19 @@ fn main() {
 
     info!("started");
     // Wait for sigint
-    signal.recv().unwrap();
-    sigint.store(true, Ordering::Relaxed);
+    loop {
+        thread::sleep(Duration::from_millis(10));
+
+        unsafe {
+            if SIGINT {
+                sigint.store(true, Ordering::Relaxed);
+            }
+        }
+
+        if sigint.load(Ordering::Relaxed) {
+            break;
+        }
+    }
 
     info!("shutding down");
     for handle in handles {
