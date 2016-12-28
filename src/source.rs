@@ -86,12 +86,17 @@ fn fetch(source: &config::Source,
         let mut file = try!(File::create(&temp_file));
 
         for line in body.lines() {
-            let line = match format(line.trim(), labels, now) {
-                Err(_) => {
-                    warn!("bad row {}", &line);
-                    continue;
+            let line = match source.format {
+                config::SourceFormat::Sensision => line.trim().into(),
+                config::SourceFormat::Prometheus => {
+                    match format(line.trim(), labels, now) {
+                        Err(_) => {
+                            warn!("bad row {}", &line);
+                            continue;
+                        }
+                        Ok(v) => v,
+                    }
                 }
-                Ok(v) => v,
             };
 
             if line.is_empty() {

@@ -34,12 +34,13 @@ sources: # Sources definitions (Optional)
   source1:                             # Source name         (Required)
     url: http://127.0.0.1:9100/metrics # Promotheus endpoint (Required)
     period: 10000                      # Polling interval    (Required)
+    format: prometheus                 # Polling format      (Optional, default: prometheus, value: [prometheus, sensision])
 ```
 
 #### Sinks
-Beamium can have one to many Warp10 endpoints. A *sink* is defined as follow:
+Beamium can have none to many Warp10 endpoints. A *sink* is defined as follow:
 ``` yaml
-sinks: # Sinks definitions (at least one is required)
+sinks: # Sinks definitions (Optional)
   source1:                             # Sink name                    (Required)
     url: https://warp.io/api/v0/update # Warp10 endpoint              (Required)
     token: mywarp10token               # Warp10 write token           (Required)
