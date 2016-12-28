@@ -1,13 +1,13 @@
-# Beamium - Promotheus to Warp10 metrics forwarder
+# Beamium - Prometheus to Warp10 metrics forwarder
 [![version](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/runabove/beamium)
 [![Build Status](https://travis-ci.org/runabove/beamium.svg?branch=master)](https://travis-ci.org/runabove/beamium)
 
-Beamium collect metrics from Promotheus endpoints and forward them to Warp10 data platform.
+Beamium collect metrics from Prometheus endpoints and forward them to Warp10 data platform.
 
 Beamium is written in Rust to ensure efficiency, a very low footprint and deterministic performances.
 
 Beamium key points:
- - **Simple**: Beamium fetch Promotheus metrics and so benefits from an awesome community.
+ - **Simple**: Beamium fetch Prometheus metrics and so benefits from an awesome community.
  - **Reliable**: Beamium handle network failure. Never lose data. We guarantee void proof graph ;)
  - **Versatile**: Beamium can also fetch metrics from a directory.
  - **Powerfull**: Beamium is able to filter metrics and to send them to multiple Warp10 platforms.
@@ -28,11 +28,11 @@ Beamium come with a [sample config file](config.sample.yaml). Simply copy the sa
 Config is composed of four parts:
 
 #### Sources
-Beamium can have none to many Promotheus endpoints. A *source* is defined as follow:
+Beamium can have none to many Prometheus endpoints. A *source* is defined as follow:
 ``` yaml
 sources: # Sources definitions (Optional)
   source1:                             # Source name         (Required)
-    url: http://127.0.0.1:9100/metrics # Promotheus endpoint (Required)
+    url: http://127.0.0.1:9100/metrics # Prometheus endpoint (Required)
     period: 10000                      # Polling interval    (Required)
     format: prometheus                 # Polling format      (Optional, default: prometheus, value: [prometheus, sensision])
 ```

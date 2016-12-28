@@ -214,7 +214,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                         } else if f == "sensision" {
                             SourceFormat::Sensision
                         } else {
-                            return Err(format!("sinks.{}.format should be 'promotheus' or 'sensision'", name).into())
+                            return Err(format!("sinks.{}.format should be 'Prometheus' or 'sensision'", name).into())
                         }
                     };
 
