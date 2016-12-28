@@ -33,6 +33,15 @@ pub struct Source {
     pub name: String,
     pub url: String,
     pub period: u64,
+    pub format: SourceFormat,
+}
+
+#[derive(Debug)]
+#[derive(Clone)]
+/// Source format.
+pub enum SourceFormat {
+    Prometheus,
+    Sensision,
 }
 
 #[derive(Debug)]
@@ -193,11 +202,27 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                     .ok_or(format!("sources.{}.period is required and should be a number", name)));
                 let period = try!(cast::u64(period)
                     .map_err(|_| format!("sources.{}.period is invalid", name)));
+                let format = if v["format"].is_badvalue() {
+                        SourceFormat::Prometheus
+                    } else {
+                        let f = try!(v["format"]
+                            .as_str()
+                            .ok_or(format!("sinks.{}.format should be a string", name)));
+
+                        if f == "prometheus" {
+                            SourceFormat::Prometheus
+                        } else if f == "sensision" {
+                            SourceFormat::Sensision
+                        } else {
+                            return Err(format!("sinks.{}.format should be 'promotheus' or 'sensision'", name).into())
+                        }
+                    };
 
                 config.sources.push(Source {
                     name: String::from(name),
                     url: String::from(url),
                     period: period,
+                    format: format,
                 })
             }
         }
