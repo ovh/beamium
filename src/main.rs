@@ -1,6 +1,6 @@
 //! # Beamium.
 //!
-//! Beamium scrap promotheus endpoint and forward metrics to Warp10.
+//! Beamium scrap Prometheus endpoint and forward metrics to Warp10.
 extern crate clap;
 extern crate yaml_rust;
 extern crate time;
@@ -53,7 +53,7 @@ fn main() {
     let matches = App::new("beamium")
         .version(env!("CARGO_PKG_VERSION"))
         .author("d33d33 <kevin@d33d33.fr>")
-        .about("Send Promotheus metrics to Warp10")
+        .about("Send Prometheus metrics to Warp10")
         .args_from_usage("-c, --config=[FILE] 'Sets a custom config file'
                               \
                           -v...                'Increase verbosity level (console only)'")

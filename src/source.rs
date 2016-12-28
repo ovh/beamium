@@ -1,6 +1,6 @@
 //! # Source module.
 //!
-//! The Source module fetch metrics to Promotheus.
+//! The Source module fetch metrics to Prometheus.
 use std::thread;
 use std::time::Duration;
 use std::sync::Arc;
@@ -54,7 +54,7 @@ pub fn source(source: &config::Source,
     }
 }
 
-/// Fetch retrieve metrics from Promotheus.
+/// Fetch retrieve metrics from Prometheus.
 fn fetch(source: &config::Source,
          labels: &String,
          parameters: &config::Parameters)
@@ -118,14 +118,14 @@ fn fetch(source: &config::Source,
     Ok(())
 }
 
-/// Format Wqrp10 metrics from Promotheus one.
+/// Format Wqrp10 metrics from Prometheus one.
 fn format(line: &str, labels: &String, now: i64) -> Result<String, Box<Error>> {
     // Skip comments
     if line.starts_with("#") {
         return Ok(String::new());
     }
 
-    // Extract promotheus metric
+    // Extract Prometheus metric
     let mut tokens = line.split_whitespace();
     let class = try!(tokens.next().ok_or("no class"));
     let value = try!(tokens.next().ok_or("no value"));
@@ -142,7 +142,7 @@ fn format(line: &str, labels: &String, now: i64) -> Result<String, Box<Error>> {
         String::from(class)
     } else {
         if class.ends_with("}") {
-            // Has promotheus labels
+            // Has Prometheus labels
             let mut cl = String::from(class);
             cl.pop();
             if !class.ends_with("{") {
