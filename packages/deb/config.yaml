@@ -1,0 +1,16 @@
+## Prometheus endpoint to fetch
+# sources:
+#   source1:
+#     url: http://127.0.0.1:9100/metrics
+#     period: 10000
+
+## Warp10 platform to send data
+# sinks:
+#   sink1:
+#     url: WARP10_ENDPOINT
+#     token: WARP10_TOKEN
+
+parameters:
+  source-dir: /opt/beamium/sources
+  sink-dir: /opt/beamium/sinks
+  log-file: /var/log/beamium/beamium.log

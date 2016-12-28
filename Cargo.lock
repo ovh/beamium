@@ -1,6 +1,6 @@
 [root]
 name = "beamium"
-version = "0.0.1"
+version = "1.0.0"
 dependencies = [
  "cast 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.19.2 (registry+https://github.com/rust-lang/crates.io-index)",
