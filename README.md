@@ -1,5 +1,6 @@
 # Beamium - Promotheus to Warp10 metrics forwarder
 [![version](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/runabove/beamium)
+[![Build Status](https://travis-ci.org/runabove/beamium.svg?branch=master)](https://travis-ci.org/runabove/beamium)
 
 Beamium collect metrics from Promotheus endpoints and forward them to Warp10 data platform.
 
