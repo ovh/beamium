@@ -1,0 +1,130 @@
+//! # Beamium.
+//!
+//! Beamium scrap promotheus endpoint and forward metrics to Warp10.
+extern crate clap;
+extern crate yaml_rust;
+extern crate chan_signal;
+extern crate time;
+extern crate hyper;
+extern crate cast;
+extern crate regex;
+#[macro_use(o, slog_log, slog_trace, slog_debug, slog_info, slog_warn, slog_error, slog_crit)]
+extern crate slog;
+#[macro_use]
+extern crate slog_scope;
+extern crate slog_term;
+extern crate slog_stream;
+extern crate slog_json;
+
+use clap::App;
+use std::thread;
+use chan_signal::Signal;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::fs;
+
+mod config;
+mod source;
+mod router;
+mod sink;
+mod log;
+
+/// Main loop.
+fn main() {
+    // Setup a bare logger
+    log::bootstrap();
+
+    let matches = App::new("beamium")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author("d33d33 <kevin@d33d33.fr>")
+        .about("Send Promotheus metrics to Warp10")
+        .args_from_usage("-c, --config=[FILE] 'Sets a custom config file'
+                              \
+                          -v...                'Increase verbosity level (console only)'")
+        .get_matches();
+
+    info!("starting");
+
+    // Bootstrap config
+    let config_path = matches.value_of("config").unwrap_or("");
+    let config = config::load_config(&config_path);
+    if config.is_err() {
+        crit!("Fail to load config {}: {}",
+              &config_path,
+              config.err().unwrap());
+        std::process::exit(-1);
+    }
+    let config = config.ok().unwrap();
+
+    // Setup logging
+    log::log(&config.parameters,
+             match matches.occurrences_of("v") {
+                 0 => slog::Level::Info,
+                 1 => slog::Level::Debug,
+                 2 | _ => slog::Level::Trace,
+             });
+
+    // Ensure dirs
+    let dir = fs::create_dir_all(&config.parameters.source_dir);
+    if dir.is_err() {
+        crit!("Fail to create source directory {}: {}",
+              &config.parameters.source_dir,
+              dir.err().unwrap());
+        std::process::exit(-1);
+    }
+    let dir = fs::create_dir_all(&config.parameters.sink_dir);
+    if dir.is_err() {
+        crit!("Fail to create sink directory {}: {}",
+              &config.parameters.sink_dir,
+              dir.err().unwrap());
+        std::process::exit(-1);
+    }
+
+    // Synchronisation stuff
+    let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
+    let sigint = Arc::new(AtomicBool::new(false));
+    let mut handles = Vec::with_capacity(config.sources.len() + 1 + config.sinks.len());
+
+    // Spawn sources
+    info!("spawning sources");
+    for source in config.sources {
+        let (labels, parameters, sigint) =
+            (config.labels.clone(), config.parameters.clone(), sigint.clone());
+        handles.push(thread::spawn(move || {
+            slog_scope::scope(slog_scope::logger().new(o!("source" => source.name.clone())),
+                              || source::source(&source, &labels, &parameters, sigint));
+        }));
+    }
+
+    // Spawn router
+    info!("spawning router");
+    {
+        let (sinks, parameters, sigint) =
+            (config.sinks.clone(), config.parameters.clone(), sigint.clone());
+        handles.push(thread::spawn(move || {
+            slog_scope::scope(slog_scope::logger().new(o!()),
+                              || router::router(&sinks, &parameters, sigint));
+        }));
+    }
+
+    // Spawn sinks
+    info!("spawning sinks");
+    for sink in config.sinks {
+        let (parameters, sigint) = (config.parameters.clone(), sigint.clone());
+        handles.push(thread::spawn(move || {
+            slog_scope::scope(slog_scope::logger().new(o!("sink" => sink.name.clone())),
+                              || sink::sink(&sink, &parameters, sigint));
+        }));
+    }
+
+    info!("started");
+    // Wait for sigint
+    signal.recv().unwrap();
+    sigint.store(true, Ordering::Relaxed);
+
+    info!("shutding down");
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    info!("halted");
+}
