@@ -19,7 +19,7 @@ pub fn bootstrap() {
 
 /// Full featured logger.
 /// Send log to console and log file, also handle log level.
-pub fn log(parameters: &config::Parameters, console_level: Level) {
+pub fn log(parameters: &config::Parameters, verbose: u64) {
     // Stdout drain
     let drain_term = slog_term::streamer().full().build().ignore_err();
 
@@ -33,6 +33,11 @@ pub fn log(parameters: &config::Parameters, console_level: Level) {
     }
     let file_drain = slog_stream::async_stream(log_file.unwrap(), slog_json::default())
         .ignore_err();
+
+    // increase console log level if needed. Cap to trave
+    let console_level = parameters.log_level.as_usize() as u64 + verbose;
+    let console_level = std::cmp::min(console_level, Level::Trace.as_usize() as u64);
+    let console_level = Level::from_usize(console_level as usize).unwrap_or(Level::Trace);
 
     // Setup root logger
     let root_log = Logger::root(Duplicate::new(LevelFilter::new(drain_term, console_level),

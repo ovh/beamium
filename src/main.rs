@@ -73,12 +73,7 @@ fn main() {
     let config = config.ok().unwrap();
 
     // Setup logging
-    log::log(&config.parameters,
-             match matches.occurrences_of("v") {
-                 0 => slog::Level::Info,
-                 1 => slog::Level::Debug,
-                 2 | _ => slog::Level::Trace,
-             });
+    log::log(&config.parameters, matches.occurrences_of("v"));
 
     // Ensure dirs
     let dir = fs::create_dir_all(&config.parameters.source_dir);
