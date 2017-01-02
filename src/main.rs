@@ -30,6 +30,8 @@ mod router;
 mod sink;
 mod log;
 
+include!("version.rs");
+
 static mut SIGINT: bool = false;
 
 extern "C" fn handle_sigint(_: i32) {
@@ -51,7 +53,7 @@ fn main() {
     log::bootstrap();
 
     let matches = App::new("beamium")
-        .version(env!("CARGO_PKG_VERSION"))
+        .version(&*format!("{} ({})", env!("CARGO_PKG_VERSION"), COMMIT))
         .author("d33d33 <kevin@d33d33.fr>")
         .about("Send Prometheus metrics to Warp10")
         .args_from_usage("-c, --config=[FILE] 'Sets a custom config file'
