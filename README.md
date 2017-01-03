@@ -55,7 +55,7 @@ labels: # Labels definitions (Optional)
   label_name: label_value # Label definition             (Required)
 ```
 
-#### Labels
+#### Parameters
 Beamium can be customized through parameters. See available parameters bellow:
 ``` yaml
 parameters: # Parameters definitions (Optional)
