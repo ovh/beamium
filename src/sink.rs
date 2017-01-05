@@ -93,8 +93,12 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
 
         debug!("post metrics");
         let request = client.post(&sink.url).headers(headers).body(&metrics);
-        let res = try!(request.send());
+        let mut res = try!(request.send());
         if !res.status.is_success() {
+            let mut body = String::new();
+            try!(res.read_to_string(&mut body));
+            debug!("data {}", &body);
+
             return Err(From::from("non 200 received"));
         }
 
