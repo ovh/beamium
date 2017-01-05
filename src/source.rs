@@ -118,7 +118,7 @@ fn fetch(source: &config::Source,
     Ok(())
 }
 
-/// Format Wqrp10 metrics from Prometheus one.
+/// Format Warp10 metrics from Prometheus one.
 fn format(line: &str, labels: &String, now: i64) -> Result<String, Box<Error>> {
     // Skip comments
     if line.starts_with("#") {
@@ -126,8 +126,14 @@ fn format(line: &str, labels: &String, now: i64) -> Result<String, Box<Error>> {
     }
 
     // Extract Prometheus metric
-    let mut tokens = line.split_whitespace();
-    let class = try!(tokens.next().ok_or("no class"));
+    let index = if line.contains("{") {
+        try!(line.rfind('}').ok_or("bad class"))
+    } else {
+        try!(line.find(' ').ok_or("bad class"))
+    };
+    let (class, v) = line.split_at(index + 1);
+    let mut tokens = v.split_whitespace();
+
     let value = try!(tokens.next().ok_or("no value"));
     let timestamp = tokens.next()
         .map(|v| {
