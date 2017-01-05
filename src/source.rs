@@ -87,9 +87,17 @@ fn fetch(source: &config::Source,
 
         for line in body.lines() {
             let line = match source.format {
-                config::SourceFormat::Sensision => line.trim().into(),
+                config::SourceFormat::Sensision => {
+                    match format_sensision(line.trim(), labels) {
+                        Err(_) => {
+                            warn!("bad row {}", &line);
+                            continue;
+                        }
+                        Ok(v) => v,
+                    }
+                },
                 config::SourceFormat::Prometheus => {
-                    match format(line.trim(), labels, now) {
+                    match format_prometheus(line.trim(), labels, now) {
                         Err(_) => {
                             warn!("bad row {}", &line);
                             continue;
@@ -101,6 +109,12 @@ fn fetch(source: &config::Source,
 
             if line.is_empty() {
                 continue;
+            }
+
+            if source.metrics.is_some() {
+                if !source.metrics.as_ref().unwrap().is_match(&line) {
+                    continue;
+                }
             }
 
             try!(file.write(line.as_bytes()));
@@ -119,7 +133,7 @@ fn fetch(source: &config::Source,
 }
 
 /// Format Warp10 metrics from Prometheus one.
-fn format(line: &str, labels: &String, now: i64) -> Result<String, Box<Error>> {
+fn format_prometheus(line: &str, labels: &String, now: i64) -> Result<String, Box<Error>> {
     // Skip comments
     if line.starts_with("#") {
         return Ok(String::new());
@@ -143,24 +157,50 @@ fn format(line: &str, labels: &String, now: i64) -> Result<String, Box<Error>> {
         })
         .unwrap_or(now);
 
-    // Manage labels
-    let class = if labels.is_empty() {
-        String::from(class)
+    // Format class
+    let mut parts = class.splitn(2, "{");
+    let class = String::from(try!(parts.next().ok_or("no_class")));
+    let plabels = parts.next();
+    let mut slabels = if plabels.is_some() {
+        let mut labels = plabels.unwrap().split("\",")
+            .map(|v| v.replace("=", "%3D")) // escape
+            .map(|v| v.replace("%3D\"", "=")) // remove left double quote
+            .map(|v| v.replace("\"}", "")) // remove right double quote
+            .map(|v| v.replace(",", "%2C")) // escape
+            .map(|v| v.replace("}", "%7D")) // escape
+            .map(|v| v.replace(r"\\", r"\")) // unescape
+            .map(|v| v.replace("\\\"", "\"")) // unescape
+            .map(|v| v.replace(r"\n", "%0A")) // unescape
+            .fold(String::new(), |acc, x| acc + &x + ",");
+        labels.pop();
+        labels
     } else {
-        if class.ends_with("}") {
-            // Has Prometheus labels
-            let mut cl = String::from(class);
-            cl.pop();
-            if !class.ends_with("{") {
-                // Non empty labels, append ours
-                cl.push(',')
-            }
-            format!("{}{}}}", cl, labels)
-        } else {
-            // No labels
-            format!("{}{{{}}}", class, labels)
-        }
+        String::new()
     };
 
+    if !labels.is_empty() {
+        if !slabels.is_empty() {
+            slabels += ",";
+        }
+        slabels += labels;
+    }
+
+    let class = format!("{}{{{}}}", class, slabels);
+
     Ok(format!("{}// {} {}", timestamp, class, value))
+}
+
+/// Format Warp10 metrics from Sensision one.
+fn format_sensision(line: &str, labels: &String) -> Result<String, Box<Error>> {
+    if labels.is_empty() {
+        return Ok(String::from(line));
+    }
+    let mut parts = line.splitn(2, "{");
+
+    let class = String::from(try!(parts.next().ok_or("no_class")));
+    let plabels = String::from(try!(parts.next().ok_or("no_labels")));
+
+    let slabels = labels.clone() + if plabels.trim().starts_with("}") {""} else {","} + &plabels;
+
+    Ok(format!("{}{{{}", class, slabels))
 }

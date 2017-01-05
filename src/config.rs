@@ -34,6 +34,7 @@ pub struct Source {
     pub url: String,
     pub period: u64,
     pub format: SourceFormat,
+    pub metrics: Option<regex::RegexSet>,
 }
 
 #[derive(Debug)]
@@ -217,12 +218,26 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                             return Err(format!("sinks.{}.format should be 'Prometheus' or 'sensision'", name).into())
                         }
                     };
+                let metrics = if v["metrics"].is_badvalue() {
+                    None
+                } else {
+                    let mut metrics = Vec::new();
+                    let values = try!(v["metrics"].as_vec().ok_or("metrics should be an array"));
+                    for v in values {
+                        let value = try!(regex::Regex::new(try!(v.as_str()
+                                .ok_or(format!("metrics.{} is invalid", name)))));
+                        metrics.push(String::from(r"^(\S*)\s") + value.as_str());
+                    }
+
+                    Some(try!(regex::RegexSet::new(&metrics)))
+                };
 
                 config.sources.push(Source {
                     name: String::from(name),
                     url: String::from(url),
                     period: period,
                     format: format,
+                    metrics: metrics,
                 })
             }
         }
@@ -250,7 +265,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 } else {
                     Some(try!(regex::Regex::new(try!(v["selector"]
                         .as_str()
-                        .ok_or(format!("sinks.{}.selector should be a string", name))))))
+                        .ok_or(format!("sinks.{}.selector is invalid", name))))))
                 };
 
                 config.sinks.push(Sink {
