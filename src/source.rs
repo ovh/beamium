@@ -171,7 +171,13 @@ fn format_prometheus(line: &str, labels: &String, now: i64) -> Result<String, Bo
             .map(|v| v.replace(r"\\", r"\")) // unescape
             .map(|v| v.replace("\\\"", "\"")) // unescape
             .map(|v| v.replace(r"\n", "%0A")) // unescape
-            .fold(String::new(), |acc, x| acc + &x + ",");
+            .fold(String::new(), |acc, x| {
+                // skip invalid values
+                if !x.contains("=") {
+                    return acc
+                }
+                acc + &x + ","
+            });
         labels.pop();
         labels
     } else {
