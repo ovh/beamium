@@ -43,11 +43,13 @@ sources: # Sources definitions (Optional)
 Beamium can have none to many Warp10 endpoints. A *sink* is defined as follow:
 ``` yaml
 sinks: # Sinks definitions (Optional)
-  source1:                             # Sink name                    (Required)
-    url: https://warp.io/api/v0/update # Warp10 endpoint              (Required)
-    token: mywarp10token               # Warp10 write token           (Required)
-    token-header: X-Custom-Token       # Warp10 token header name     (Optional, default: X-Warp10-Token)
-    selector: metrics.*                # Regex used to filter metrics (Optional, default: None)
+  source1:                             # Sink name                                (Required)
+    url: https://warp.io/api/v0/update # Warp10 endpoint                          (Required)
+    token: mywarp10token               # Warp10 write token                       (Required)
+    token-header: X-Custom-Token       # Warp10 token header name                 (Optional, default: X-Warp10-Token)
+    selector: metrics.*                # Regex used to filter metrics             (Optional, default: None)
+    ttl: 3600                          # Discard file older than ttl (seconds)    (Optional, default: 3600)
+    size: 1073741824                   # Discard old file if sink size is greater (Optional, default: 1073741824)
 ```
 
 #### Labels

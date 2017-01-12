@@ -14,6 +14,7 @@ use std::error::Error;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use hyper;
+use std::os::unix::fs::MetadataExt;
 
 use config;
 
@@ -28,6 +29,11 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
         match send(sink, parameters) {
             Err(err) => error!("post fail: {}", err),
             Ok(_) => info!("post success"),
+        }
+
+        let res = cappe(sink, parameters);
+        if res.is_err() {
+            error!("cappe fail: {}", res.unwrap_err());
         }
 
         let elapsed = (time::now_utc() - start).num_milliseconds() as u64;
@@ -45,31 +51,24 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
     }
 }
 
-/// Send send sink metrics to Warp10.
+/// Send sink metrics to Warp10.
 fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<Error>> {
     debug!("post {}", &sink.url);
+
     loop {
-        let entries = try!(fs::read_dir(&parameters.sink_dir));
+        let entries = try!(files(&parameters.sink_dir, &sink.name));
         let mut files = Vec::with_capacity(parameters.batch_count as usize);
         let mut metrics = String::new();
 
         // Load metrics
         let mut batch_size = 0;
-        for (i, entry) in entries.enumerate() {
-            let entry = try!(entry);
-            let file_name = String::from(entry.file_name().to_str().unwrap_or(""));
-            // Look only for metrics files of the sink
-            if entry.path().extension() != Some(OsStr::new("metrics")) ||
-               !file_name.starts_with(&sink.name) {
-                continue;
-            }
-
+        for (i, entry) in entries.iter().enumerate() {
             // Split metrics in capped batch
             if i > parameters.batch_count as usize || batch_size > parameters.batch_size as usize {
                 break;
             }
 
-            debug!("open sink file {}", format!("{:?}", entry.path()));
+            debug!("open sink file {:?}", entry.path());
             let file = match read(entry.path()) {
                 Err(_) => continue,
                 Ok(v) => v,
@@ -112,6 +111,36 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
     Ok(())
 }
 
+fn cappe(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<Error>> {
+    let entries = try!(files(&parameters.sink_dir, &sink.name));
+    let mut sinks_size: u64 = 0;
+
+    for entry in &entries {
+        let meta = try!(entry.metadata());
+
+        let modified = meta.modified();
+
+        if modified.is_ok() {
+            let modified = modified.unwrap();
+            let age = modified.elapsed().unwrap_or(Duration::new(0, 0));
+
+            if age.as_secs() > sink.ttl {
+                warn!("skip file {:?}", entry.path());
+                try!(fs::remove_file(entry.path()));
+                continue;
+            }
+        }
+
+        sinks_size += meta.size();
+        if sinks_size > sink.size {
+            warn!("skip file {:?}", entry.path());
+            try!(fs::remove_file(entry.path()));
+        }
+    }
+
+    Ok(())
+}
+
 /// Read a file as String.
 fn read(path: PathBuf) -> Result<String, Box<Error>> {
     let mut file = try!(File::open(path));
@@ -120,4 +149,28 @@ fn read(path: PathBuf) -> Result<String, Box<Error>> {
     try!(file.read_to_string(&mut content));
 
     Ok(content)
+}
+
+fn files(dir: &str, sink_name: &str) -> Result<Vec<fs::DirEntry>, Box<Error>> {
+    let mut entries: Vec<fs::DirEntry> = try!(fs::read_dir(dir)).filter_map(|entry| {
+        if entry.is_err() {
+            return None;
+        }
+        let entry = entry.unwrap();
+        if entry.path().extension() != Some(OsStr::new("metrics")) {
+            return None;
+        }
+
+        let file_name = String::from(entry.file_name().to_str().unwrap_or(""));
+
+        if !file_name.starts_with(sink_name) {
+            return None;
+        }
+
+        Some(entry)
+    }).collect();
+
+    entries.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+
+    Ok(entries)
 }
