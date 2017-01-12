@@ -54,6 +54,8 @@ pub struct Sink {
     pub token: String,
     pub token_header: String,
     pub selector: Option<regex::Regex>,
+    pub ttl: u64,
+    pub size: u64,
 }
 
 #[derive(Debug)]
@@ -268,12 +270,34 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                         .ok_or(format!("sinks.{}.selector is invalid", name))))))
                 };
 
+                let ttl = if v["ttl"].is_badvalue() {
+                    3600
+                } else {
+                    let ttl = try!(v["ttl"]
+                        .as_i64()
+                        .ok_or(format!("sinks.{}.ttl should be a number", name)));
+                    try!(cast::u64(ttl)
+                        .map_err(|_| format!("sinks.{}.ttl should be a positive number", name)))
+                };
+
+                let size = if v["size"].is_badvalue() {
+                    1073741824
+                } else {
+                    let size = try!(v["size"]
+                        .as_i64()
+                        .ok_or(format!("sinks.{}.size should be a number", name)));
+                    try!(cast::u64(size)
+                        .map_err(|_| format!("sinks.{}.size should be a positive number", name)))
+                };
+
                 config.sinks.push(Sink {
                     name: String::from(name),
                     url: String::from(url),
                     token: String::from(token),
                     token_header: String::from(token_header),
                     selector: selector,
+                    ttl: ttl,
+                    size: size,
                 })
             }
         }
