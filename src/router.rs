@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use time;
 use std::cmp;
+use std::collections::HashMap;
 use std::io::prelude::*;
 use std::fs;
 use std::fs::File;
@@ -21,12 +22,20 @@ const REST_TIME: u64 = 10;
 
 /// Router loop.
 pub fn router(sinks: &Vec<config::Sink>,
+              labels: &HashMap<String, String>,
               parameters: &config::Parameters,
               sigint: Arc<AtomicBool>) {
+
+    let labels: String = labels.iter()
+        .fold(String::new(), |acc, (k, v)| {
+            let sep = if acc.is_empty() { "" } else { "," };
+            acc + sep + k + "=" + v
+        });
+
     loop {
         let start = time::now_utc();
 
-        match route(sinks, parameters) {
+        match route(sinks, parameters, &labels) {
             Err(err) => error!("route fail: {}", err),
             Ok(_) => info!("route success"),
         }
@@ -47,12 +56,15 @@ pub fn router(sinks: &Vec<config::Sink>,
 }
 
 /// Route handle sources forwarding.
-fn route(sinks: &Vec<config::Sink>, parameters: &config::Parameters) -> Result<(), Box<Error>> {
+fn route(sinks: &Vec<config::Sink>,
+         parameters: &config::Parameters,
+         labels: &String)
+         -> Result<(), Box<Error>> {
     debug!("route");
     loop {
         let entries = try!(fs::read_dir(&parameters.source_dir));
         let mut files = Vec::with_capacity(parameters.batch_count as usize);
-        let mut metrics = Vec::with_capacity(parameters.batch_count as usize);
+        let mut metrics: Vec<String> = Vec::new();
 
         // Load metrics
         let mut batch_size = 0;
@@ -77,9 +89,42 @@ fn route(sinks: &Vec<config::Sink>, parameters: &config::Parameters) -> Result<(
                 Ok(v) => v,
             };
 
+            for line in file.lines() {
+                if labels.is_empty() {
+                    metrics.push(String::from(line));
+                    continue;
+                }
+                let mut parts = line.splitn(2, "{");
+
+                let class = match parts.next() {
+                    None => {
+                        warn!("no_class");
+                        continue;
+                    }
+                    Some(v) => v,
+                };
+                let class = String::from(class);
+                let plabels = match parts.next() {
+                    None => {
+                        warn!("no_labels");
+                        continue;
+                    }
+                    Some(v) => v,
+                };
+                let plabels = String::from(plabels);
+
+                let slabels = labels.clone() +
+                              if plabels.trim().starts_with("}") {
+                    ""
+                } else {
+                    ","
+                } + &plabels;
+
+                metrics.push(format!("{}{{{}", class, slabels))
+            }
+
             files.push(entry.path());
             batch_size += file.len();
-            metrics.push(file);
         }
 
         // Nothing to do
@@ -100,24 +145,22 @@ fn route(sinks: &Vec<config::Sink>, parameters: &config::Parameters) -> Result<(
 
             // Write metrics
             debug!("write sink files");
-            for m in metrics {
-                for line in m.lines() {
-                    if line.is_empty() {
-                        continue;
-                    }
+            for line in metrics {
+                if line.is_empty() {
+                    continue;
+                }
 
-                    for (i, sink) in sinks.iter().enumerate() {
-                        if sink.selector.is_some() {
-                            let selector = sink.selector.as_ref().unwrap();
-                            if line.split_whitespace()
-                                .nth(1)
-                                .map_or(false, |class| selector.is_match(class)) {
-                                continue;
-                            }
+                for (i, sink) in sinks.iter().enumerate() {
+                    if sink.selector.is_some() {
+                        let selector = sink.selector.as_ref().unwrap();
+                        if line.split_whitespace()
+                            .nth(1)
+                            .map_or(false, |class| selector.is_match(class)) {
+                            continue;
                         }
-                        try!(sink_files[i].write(line.as_bytes()));
-                        try!(sink_files[i].write(b"\n"));
                     }
+                    try!(sink_files[i].write(line.as_bytes()));
+                    try!(sink_files[i].write(b"\n"));
                 }
             }
 
