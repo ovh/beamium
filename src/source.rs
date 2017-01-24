@@ -9,7 +9,6 @@ use time;
 use std::cmp;
 use hyper;
 use std::io::prelude::*;
-use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::error::Error;
@@ -21,20 +20,11 @@ use config;
 const REST_TIME: u64 = 10;
 
 /// Source loop.
-pub fn source(source: &config::Source,
-              labels: &HashMap<String, String>,
-              parameters: &config::Parameters,
-              sigint: Arc<AtomicBool>) {
-    let labels: String = labels.iter()
-        .fold(String::new(), |acc, (k, v)| {
-            let sep = if acc.is_empty() { "" } else { "," };
-            acc + sep + k + "=" + v
-        });
-
+pub fn source(source: &config::Source, parameters: &config::Parameters, sigint: Arc<AtomicBool>) {
     loop {
         let start = time::now_utc();
 
-        match fetch(source, &labels, parameters) {
+        match fetch(source, parameters) {
             Err(err) => error!("fetch fail: {}", err),
             Ok(_) => info!("fetch success"),
         }
@@ -55,10 +45,7 @@ pub fn source(source: &config::Source,
 }
 
 /// Fetch retrieve metrics from Prometheus.
-fn fetch(source: &config::Source,
-         labels: &String,
-         parameters: &config::Parameters)
-         -> Result<(), Box<Error>> {
+fn fetch(source: &config::Source, parameters: &config::Parameters) -> Result<(), Box<Error>> {
     debug!("fetch {}", &source.url);
 
     // Fetch metrics
@@ -87,17 +74,9 @@ fn fetch(source: &config::Source,
 
         for line in body.lines() {
             let line = match source.format {
-                config::SourceFormat::Sensision => {
-                    match format_sensision(line.trim(), labels) {
-                        Err(_) => {
-                            warn!("bad row {}", &line);
-                            continue;
-                        }
-                        Ok(v) => v,
-                    }
-                },
+                config::SourceFormat::Sensision => String::from(line.trim()),
                 config::SourceFormat::Prometheus => {
-                    match format_prometheus(line.trim(), labels, now) {
+                    match format_prometheus(line.trim(), now) {
                         Err(_) => {
                             warn!("bad row {}", &line);
                             continue;
@@ -133,7 +112,7 @@ fn fetch(source: &config::Source,
 }
 
 /// Format Warp10 metrics from Prometheus one.
-fn format_prometheus(line: &str, labels: &String, now: i64) -> Result<String, Box<Error>> {
+fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     // Skip comments
     if line.starts_with("#") {
         return Ok(String::new());
@@ -161,7 +140,7 @@ fn format_prometheus(line: &str, labels: &String, now: i64) -> Result<String, Bo
     let mut parts = class.splitn(2, "{");
     let class = String::from(try!(parts.next().ok_or("no_class")));
     let plabels = parts.next();
-    let mut slabels = if plabels.is_some() {
+    let slabels = if plabels.is_some() {
         let mut labels = plabels.unwrap().split("\",")
             .map(|v| v.replace("=", "%3D")) // escape
             .map(|v| v.replace("%3D\"", "=")) // remove left double quote
@@ -184,29 +163,7 @@ fn format_prometheus(line: &str, labels: &String, now: i64) -> Result<String, Bo
         String::new()
     };
 
-    if !labels.is_empty() {
-        if !slabels.is_empty() {
-            slabels += ",";
-        }
-        slabels += labels;
-    }
-
     let class = format!("{}{{{}}}", class, slabels);
 
     Ok(format!("{}// {} {}", timestamp, class, value))
-}
-
-/// Format Warp10 metrics from Sensision one.
-fn format_sensision(line: &str, labels: &String) -> Result<String, Box<Error>> {
-    if labels.is_empty() {
-        return Ok(String::from(line));
-    }
-    let mut parts = line.splitn(2, "{");
-
-    let class = String::from(try!(parts.next().ok_or("no_class")));
-    let plabels = String::from(try!(parts.next().ok_or("no_labels")));
-
-    let slabels = labels.clone() + if plabels.trim().starts_with("}") {""} else {","} + &plabels;
-
-    Ok(format!("{}{{{}", class, slabels))
 }

@@ -101,22 +101,23 @@ fn main() {
     // Spawn sources
     info!("spawning sources");
     for source in config.sources {
-        let (labels, parameters, sigint) =
-            (config.labels.clone(), config.parameters.clone(), sigint.clone());
+        let (parameters, sigint) = (config.parameters.clone(), sigint.clone());
         handles.push(thread::spawn(move || {
             slog_scope::scope(slog_scope::logger().new(o!("source" => source.name.clone())),
-                              || source::source(&source, &labels, &parameters, sigint));
+                              || source::source(&source, &parameters, sigint));
         }));
     }
 
     // Spawn router
     info!("spawning router");
     {
-        let (sinks, parameters, sigint) =
-            (config.sinks.clone(), config.parameters.clone(), sigint.clone());
+        let (sinks, labels, parameters, sigint) = (config.sinks.clone(),
+                                                   config.labels.clone(),
+                                                   config.parameters.clone(),
+                                                   sigint.clone());
         handles.push(thread::spawn(move || {
             slog_scope::scope(slog_scope::logger().new(o!()),
-                              || router::router(&sinks, &parameters, sigint));
+                              || router::router(&sinks, &labels, &parameters, sigint));
         }));
     }
 
