@@ -14,6 +14,8 @@ use std::error::Error;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use hyper;
+use hyper::net::HttpsConnector;
+use hyper_native_tls::NativeTlsClient;
 use std::os::unix::fs::MetadataExt;
 
 use config;
@@ -86,7 +88,12 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
         }
 
         // Send metrics
-        let client = hyper::Client::new();
+        let ssl = NativeTlsClient::new().unwrap();
+        let connector = HttpsConnector::new(ssl);
+        let mut client = hyper::Client::with_connector(connector);
+        client.set_write_timeout(Some(Duration::from_secs(parameters.timeout)));
+        client.set_read_timeout(Some(Duration::from_secs(parameters.timeout)));
+
         let mut headers = hyper::header::Headers::new();
         headers.set_raw(sink.token_header.clone(), vec![sink.token.clone().into()]);
 

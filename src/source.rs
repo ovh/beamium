@@ -49,7 +49,10 @@ fn fetch(source: &config::Source, parameters: &config::Parameters) -> Result<(),
     debug!("fetch {}", &source.url);
 
     // Fetch metrics
-    let client = hyper::Client::new();
+    let mut client = hyper::Client::new();
+    client.set_write_timeout(Some(Duration::from_secs(parameters.timeout)));
+    client.set_read_timeout(Some(Duration::from_secs(parameters.timeout)));
+
     let mut res = try!(client.get(&source.url).send());
     if !res.status.is_success() {
         return Err(From::from("non 200 received"));
