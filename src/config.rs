@@ -69,6 +69,7 @@ pub struct Parameters {
     pub batch_count: u64,
     pub log_file: String,
     pub log_level: slog::Level,
+    pub timeout: u64,
 }
 
 #[derive(Debug)]
@@ -160,6 +161,7 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
             batch_count: 250,
             log_file: String::from(env!("CARGO_PKG_NAME")) + ".log",
             log_level: slog::Level::Info,
+            timeout: 300,
         },
     };
 
@@ -370,6 +372,15 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 let log_level = try!(slog::Level::from_usize(log_level as usize)
                     .ok_or(format!("parameters.log-level is invalid")));
                 config.parameters.log_level = log_level;
+            }
+
+            if !doc["parameters"]["timeout"].is_badvalue() {
+                let timeout = try!(doc["parameters"]["timeout"]
+                    .as_i64()
+                    .ok_or(format!("parameters.timeout should be a number")));
+                let timeout = try!(cast::u64(timeout)
+                    .map_err(|_| format!("parameters.timeout is invalid")));
+                config.parameters.timeout = timeout;
             }
         }
     }

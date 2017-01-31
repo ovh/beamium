@@ -5,6 +5,7 @@ extern crate clap;
 extern crate yaml_rust;
 extern crate time;
 extern crate hyper;
+extern crate hyper_native_tls;
 extern crate cast;
 extern crate regex;
 #[macro_use(o, slog_log, slog_trace, slog_debug, slog_info, slog_warn, slog_error, slog_crit)]

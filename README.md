@@ -70,6 +70,7 @@ parameters: # Parameters definitions (Optional)
   batch-size: 200000    # Maximum batch size                            (Optional, default: 250)
   log-file: beamium.log # Log file                                      (Optional, default: beamium.log)
   log-level: 4          # Log level                                     (Optional, default: info)
+  timeout: 500          # Http timeout (seconds)                        (Optional, default: 500)
 ```
 
 ## Contributing
