@@ -165,18 +165,18 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
         },
     };
 
-    // Load from etc
-    if Path::new("/etc/beamium/config.yaml").exists() {
-        try!(load_path("/etc/beamium/config.yaml", &mut config));
-    }
+    if config_path.is_empty() {
+        // Load from etc
+        if Path::new("/etc/beamium/config.yaml").exists() {
+            try!(load_path("/etc/beamium/config.yaml", &mut config));
+        }
 
-    // Load local
-    if Path::new("config.yaml").exists() {
-        try!(load_path("config.yaml", &mut config));
-    }
-
-    // Load from provided path
-    if !config_path.is_empty() {
+        // Load local
+        if Path::new("config.yaml").exists() {
+            try!(load_path("config.yaml", &mut config));
+        }
+    } else {
+        // Load from provided path
         try!(load_path(config_path, &mut config));
     }
 
