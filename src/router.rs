@@ -153,7 +153,7 @@ fn route(sinks: &Vec<config::Sink>,
                 for (i, sink) in sinks.iter().enumerate() {
                     if sink.selector.is_some() {
                         let selector = sink.selector.as_ref().unwrap();
-                        if line.split_whitespace()
+                        if !line.split_whitespace()
                             .nth(1)
                             .map_or(false, |class| selector.is_match(class)) {
                             continue;
