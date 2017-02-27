@@ -208,20 +208,22 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 let period = try!(cast::u64(period)
                     .map_err(|_| format!("sources.{}.period is invalid", name)));
                 let format = if v["format"].is_badvalue() {
-                        SourceFormat::Prometheus
-                    } else {
-                        let f = try!(v["format"]
-                            .as_str()
-                            .ok_or(format!("sinks.{}.format should be a string", name)));
+                    SourceFormat::Prometheus
+                } else {
+                    let f = try!(v["format"]
+                        .as_str()
+                        .ok_or(format!("sinks.{}.format should be a string", name)));
 
-                        if f == "prometheus" {
-                            SourceFormat::Prometheus
-                        } else if f == "sensision" {
-                            SourceFormat::Sensision
-                        } else {
-                            return Err(format!("sinks.{}.format should be 'Prometheus' or 'sensision'", name).into())
-                        }
-                    };
+                    if f == "prometheus" {
+                        SourceFormat::Prometheus
+                    } else if f == "sensision" {
+                        SourceFormat::Sensision
+                    } else {
+                        return Err(format!("sinks.{}.format should be 'Prometheus' or 'sensision'",
+                                           name)
+                            .into());
+                    }
+                };
                 let metrics = if v["metrics"].is_badvalue() {
                     None
                 } else {
@@ -229,7 +231,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                     let values = try!(v["metrics"].as_vec().ok_or("metrics should be an array"));
                     for v in values {
                         let value = try!(regex::Regex::new(try!(v.as_str()
-                                .ok_or(format!("metrics.{} is invalid", name)))));
+                            .ok_or(format!("metrics.{} is invalid", name)))));
                         metrics.push(String::from(r"^(\S*)\s") + value.as_str());
                     }
 
@@ -267,9 +269,13 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 let selector = if v["selector"].is_badvalue() {
                     None
                 } else {
-                    Some(try!(regex::Regex::new(format!("^{}", try!(v["selector"]
-                        .as_str()
-                        .ok_or(format!("sinks.{}.selector is invalid", name)))).as_str())))
+                    Some(try!(regex::Regex::new(format!("^{}",
+                                                        try!(v["selector"]
+                                                            .as_str()
+                                                            .ok_or(format!("sinks.{}.selector \
+                                                                            is invalid",
+                                                                           name))))
+                        .as_str())))
                 };
 
                 let ttl = if v["ttl"].is_badvalue() {

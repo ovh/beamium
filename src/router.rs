@@ -41,7 +41,7 @@ pub fn router(sinks: &Vec<config::Sink>,
                 if size > 0 {
                     info!("route success - {}", size)
                 }
-            },
+            }
         }
 
         let elapsed = (time::now_utc() - start).num_milliseconds() as u64;

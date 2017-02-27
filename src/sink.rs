@@ -32,9 +32,9 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
             Err(err) => error!("post fail: {}", err),
             Ok(size) => {
                 if size > 0 {
-                info!("post success - {}", size)
+                    info!("post success - {}", size)
                 }
-            },
+            }
         }
 
         let res = cappe(sink, parameters);
@@ -58,7 +58,10 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
 }
 
 /// Send sink metrics to Warp10.
-fn send(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<AtomicBool>) -> Result<usize, Box<Error>> {
+fn send(sink: &config::Sink,
+        parameters: &config::Parameters,
+        sigint: Arc<AtomicBool>)
+        -> Result<usize, Box<Error>> {
     let mut proc_size = 0;
 
     loop {
@@ -169,23 +172,25 @@ fn read(path: PathBuf) -> Result<String, Box<Error>> {
 }
 
 fn files(dir: &str, sink_name: &str) -> Result<Vec<fs::DirEntry>, Box<Error>> {
-    let mut entries: Vec<fs::DirEntry> = try!(fs::read_dir(dir)).filter_map(|entry| {
-        if entry.is_err() {
-            return None;
-        }
-        let entry = entry.unwrap();
-        if entry.path().extension() != Some(OsStr::new("metrics")) {
-            return None;
-        }
+    let mut entries: Vec<fs::DirEntry> = try!(fs::read_dir(dir))
+        .filter_map(|entry| {
+            if entry.is_err() {
+                return None;
+            }
+            let entry = entry.unwrap();
+            if entry.path().extension() != Some(OsStr::new("metrics")) {
+                return None;
+            }
 
-        let file_name = String::from(entry.file_name().to_str().unwrap_or(""));
+            let file_name = String::from(entry.file_name().to_str().unwrap_or(""));
 
-        if !file_name.starts_with(sink_name) {
-            return None;
-        }
+            if !file_name.starts_with(sink_name) {
+                return None;
+            }
 
-        Some(entry)
-    }).collect();
+            Some(entry)
+        })
+        .collect();
 
     entries.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
 
