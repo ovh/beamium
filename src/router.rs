@@ -35,9 +35,13 @@ pub fn router(sinks: &Vec<config::Sink>,
     loop {
         let start = time::now_utc();
 
-        match route(sinks, parameters, &labels) {
+        match route(sinks, parameters, &labels, sigint.clone()) {
             Err(err) => error!("route fail: {}", err),
-            Ok(_) => info!("route success"),
+            Ok(size) => {
+                if size > 0 {
+                    info!("route success - {}", size)
+                }
+            }
         }
 
         let elapsed = (time::now_utc() - start).num_milliseconds() as u64;
@@ -58,10 +62,15 @@ pub fn router(sinks: &Vec<config::Sink>,
 /// Route handle sources forwarding.
 fn route(sinks: &Vec<config::Sink>,
          parameters: &config::Parameters,
-         labels: &String)
-         -> Result<(), Box<Error>> {
-    debug!("route");
+         labels: &String,
+         sigint: Arc<AtomicBool>)
+         -> Result<usize, Box<Error>> {
+    let mut proc_size = 0;
+
     loop {
+        if sigint.load(Ordering::Relaxed) {
+            return Ok(proc_size);
+        }
         let entries = try!(fs::read_dir(&parameters.source_dir));
         let mut files = Vec::with_capacity(parameters.batch_count as usize);
         let mut metrics: Vec<String> = Vec::new();
@@ -127,6 +136,8 @@ fn route(sinks: &Vec<config::Sink>,
             batch_size += file.len();
         }
 
+        proc_size += metrics.len();
+
         // Nothing to do
         if files.len() == 0 {
             break;
@@ -185,7 +196,7 @@ fn route(sinks: &Vec<config::Sink>,
         }
     }
 
-    Ok(())
+    Ok(proc_size)
 }
 
 /// Read a file as String
