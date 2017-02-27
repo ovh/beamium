@@ -28,7 +28,7 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
     loop {
         let start = time::now_utc();
 
-        match send(sink, parameters) {
+        match send(sink, parameters, sigint.clone()) {
             Err(err) => error!("post fail: {}", err),
             Ok(size) => {
                 if size > 0 {
@@ -58,10 +58,14 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
 }
 
 /// Send sink metrics to Warp10.
-fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<Error>> {
+fn send(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<AtomicBool>) -> Result<usize, Box<Error>> {
     let mut proc_size = 0;
 
     loop {
+        if sigint.load(Ordering::Relaxed) {
+            return Ok(proc_size);
+        }
+
         let entries = try!(files(&parameters.sink_dir, &sink.name));
         let mut files = Vec::with_capacity(parameters.batch_count as usize);
         let mut metrics = String::new();
