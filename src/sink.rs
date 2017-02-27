@@ -30,7 +30,11 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
 
         match send(sink, parameters) {
             Err(err) => error!("post fail: {}", err),
-            Ok(_) => info!("post success"),
+            Ok(size) => {
+                if size > 0 {
+                info!("post success - {}", size)
+                }
+            },
         }
 
         let res = cappe(sink, parameters);
@@ -55,7 +59,7 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
 
 /// Send sink metrics to Warp10.
 fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<Error>> {
-    debug!("post {}", &sink.url);
+    let mut proc_size = 0;
 
     loop {
         let entries = try!(files(&parameters.sink_dir, &sink.name));
@@ -82,6 +86,8 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
             metrics.push_str("\n");
         }
 
+        proc_size += metrics.len();
+
         // Nothing to do
         if metrics.len() == 0 {
             break;
@@ -97,7 +103,7 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
         let mut headers = hyper::header::Headers::new();
         headers.set_raw(sink.token_header.clone(), vec![sink.token.clone().into()]);
 
-        debug!("post metrics");
+        debug!("post {}", &sink.url);
         let request = client.post(&sink.url).headers(headers).body(&metrics);
         let mut res = try!(request.send());
         if !res.status.is_success() {
@@ -115,7 +121,7 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
         }
     }
 
-    Ok(())
+    Ok(proc_size)
 }
 
 fn cappe(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<Error>> {

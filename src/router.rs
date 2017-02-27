@@ -37,7 +37,11 @@ pub fn router(sinks: &Vec<config::Sink>,
 
         match route(sinks, parameters, &labels) {
             Err(err) => error!("route fail: {}", err),
-            Ok(_) => info!("route success"),
+            Ok(size) => {
+                if size > 0 {
+                    info!("route success - {}", size)
+                }
+            },
         }
 
         let elapsed = (time::now_utc() - start).num_milliseconds() as u64;
@@ -60,7 +64,8 @@ fn route(sinks: &Vec<config::Sink>,
          parameters: &config::Parameters,
          labels: &String)
          -> Result<(), Box<Error>> {
-    debug!("route");
+    let mut proc_size = 0;
+
     loop {
         let entries = try!(fs::read_dir(&parameters.source_dir));
         let mut files = Vec::with_capacity(parameters.batch_count as usize);
@@ -127,6 +132,8 @@ fn route(sinks: &Vec<config::Sink>,
             batch_size += file.len();
         }
 
+        proc_size += metrics.len();
+
         // Nothing to do
         if files.len() == 0 {
             break;
@@ -185,7 +192,7 @@ fn route(sinks: &Vec<config::Sink>,
         }
     }
 
-    Ok(())
+    Ok(proc_size)
 }
 
 /// Read a file as String
