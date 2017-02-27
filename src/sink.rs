@@ -28,9 +28,13 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
     loop {
         let start = time::now_utc();
 
-        match send(sink, parameters) {
+        match send(sink, parameters, sigint.clone()) {
             Err(err) => error!("post fail: {}", err),
-            Ok(_) => info!("post success"),
+            Ok(size) => {
+                if size > 0 {
+                    info!("post success - {}", size)
+                }
+            }
         }
 
         let res = cappe(sink, parameters);
@@ -54,10 +58,17 @@ pub fn sink(sink: &config::Sink, parameters: &config::Parameters, sigint: Arc<At
 }
 
 /// Send sink metrics to Warp10.
-fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<Error>> {
-    debug!("post {}", &sink.url);
+fn send(sink: &config::Sink,
+        parameters: &config::Parameters,
+        sigint: Arc<AtomicBool>)
+        -> Result<usize, Box<Error>> {
+    let mut proc_size = 0;
 
     loop {
+        if sigint.load(Ordering::Relaxed) {
+            return Ok(proc_size);
+        }
+
         let entries = try!(files(&parameters.sink_dir, &sink.name));
         let mut files = Vec::with_capacity(parameters.batch_count as usize);
         let mut metrics = String::new();
@@ -82,6 +93,8 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
             metrics.push_str("\n");
         }
 
+        proc_size += metrics.len();
+
         // Nothing to do
         if metrics.len() == 0 {
             break;
@@ -97,7 +110,7 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
         let mut headers = hyper::header::Headers::new();
         headers.set_raw(sink.token_header.clone(), vec![sink.token.clone().into()]);
 
-        debug!("post metrics");
+        debug!("post {}", &sink.url);
         let request = client.post(&sink.url).headers(headers).body(&metrics);
         let mut res = try!(request.send());
         if !res.status.is_success() {
@@ -115,7 +128,7 @@ fn send(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<
         }
     }
 
-    Ok(())
+    Ok(proc_size)
 }
 
 fn cappe(sink: &config::Sink, parameters: &config::Parameters) -> Result<(), Box<Error>> {
@@ -159,23 +172,25 @@ fn read(path: PathBuf) -> Result<String, Box<Error>> {
 }
 
 fn files(dir: &str, sink_name: &str) -> Result<Vec<fs::DirEntry>, Box<Error>> {
-    let mut entries: Vec<fs::DirEntry> = try!(fs::read_dir(dir)).filter_map(|entry| {
-        if entry.is_err() {
-            return None;
-        }
-        let entry = entry.unwrap();
-        if entry.path().extension() != Some(OsStr::new("metrics")) {
-            return None;
-        }
+    let mut entries: Vec<fs::DirEntry> = try!(fs::read_dir(dir))
+        .filter_map(|entry| {
+            if entry.is_err() {
+                return None;
+            }
+            let entry = entry.unwrap();
+            if entry.path().extension() != Some(OsStr::new("metrics")) {
+                return None;
+            }
 
-        let file_name = String::from(entry.file_name().to_str().unwrap_or(""));
+            let file_name = String::from(entry.file_name().to_str().unwrap_or(""));
 
-        if !file_name.starts_with(sink_name) {
-            return None;
-        }
+            if !file_name.starts_with(sink_name) {
+                return None;
+            }
 
-        Some(entry)
-    }).collect();
+            Some(entry)
+        })
+        .collect();
 
     entries.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
 

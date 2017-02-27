@@ -1,6 +1,6 @@
 [package]
 name = "beamium"
-version = "1.3.1"
+version = "1.4.0"
 authors = [ "d33d33 <kevin.georges@corp.ovh.com>" ]
 
 build = "build.rs"
@@ -14,8 +14,11 @@ time = "0.1.35"
 hyper = "0.10.0"
 hyper-native-tls = "0.2.1"
 regex = "0.1.80"
-slog = "1.2"
 slog-term = "1.3.3"
 slog-stream = "1.2.0"
 slog-json = "1.2.1"
 slog-scope = "0.2.2"
+
+[dependencies.slog]
+version = "1.2"
+features = ["release_max_level_debug", "max_level_debug"]
