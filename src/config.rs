@@ -267,9 +267,9 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 let selector = if v["selector"].is_badvalue() {
                     None
                 } else {
-                    Some(try!(regex::Regex::new(try!(v["selector"]
+                    Some(try!(regex::Regex::new(format!("^{}", try!(v["selector"]
                         .as_str()
-                        .ok_or(format!("sinks.{}.selector is invalid", name))))))
+                        .ok_or(format!("sinks.{}.selector is invalid", name)))).as_str())))
                 };
 
                 let ttl = if v["ttl"].is_badvalue() {
