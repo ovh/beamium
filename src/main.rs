@@ -95,7 +95,6 @@ fn main() {
     }
 
     // Synchronisation stuff
-    // let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
     let sigint = Arc::new(AtomicBool::new(false));
     let mut handles = Vec::with_capacity(config.sources.len() + 1 + config.sinks.len());
 
