@@ -183,7 +183,7 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
     Ok(config)
 }
 
-/// Extend confif from file.
+/// Extend config from file.
 fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), ConfigError> {
     let mut file = try!(File::open(file_path));
     let mut contents = String::new();
