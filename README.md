@@ -10,7 +10,7 @@ Beamium key points:
  - **Simple**: Beamium fetch Prometheus metrics and so benefits from an awesome community.
  - **Reliable**: Beamium handle network failure. Never lose data. We guarantee void proof graph ;)
  - **Versatile**: Beamium can also fetch metrics from a directory.
- - **Powerfull**: Beamium is able to filter metrics and to send them to multiple Warp10 platforms.
+ - **Powerful**: Beamium is able to filter metrics and to send them to multiple Warp10 platforms.
 
 ## Status
 Beamium is currently under development.
@@ -18,7 +18,7 @@ Beamium is currently under development.
 ## Building
 Beamium is pretty easy to build.
  - Clone the repository
- - Setup a minimal working config (see bellow)
+ - Setup a minimal working config (see below)
  - Build and run `cargo run`
 
 ## Configuration
