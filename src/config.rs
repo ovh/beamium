@@ -212,14 +212,15 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 } else {
                     let f = try!(v["format"]
                         .as_str()
-                        .ok_or(format!("sinks.{}.format should be a string", name)));
+                        .ok_or(format!("sources.{}.format should be a string", name)));
 
                     if f == "prometheus" {
                         SourceFormat::Prometheus
                     } else if f == "sensision" {
                         SourceFormat::Sensision
                     } else {
-                        return Err(format!("sinks.{}.format should be 'Prometheus' or 'sensision'",
+                        return Err(format!("sources.{}.format should be 'prometheus' or \
+                                           'sensision'",
                                            name)
                             .into());
                     }
