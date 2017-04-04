@@ -147,7 +147,7 @@ fn main() {
         }
     }
 
-    info!("shutding down");
+    info!("shutting down");
     for handle in handles {
         handle.join().unwrap();
     }

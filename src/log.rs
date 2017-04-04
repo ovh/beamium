@@ -1,7 +1,11 @@
 //! # Log module.
 //!
 //! The Config module provides the log facility.
-use slog::*;
+use slog::Logger;
+use slog::Level;
+use slog::Duplicate;
+use slog::LevelFilter;
+use slog::DrainExt;
 use slog_stream;
 use slog_term;
 use slog_json;
