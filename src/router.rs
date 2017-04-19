@@ -66,6 +66,8 @@ fn route(sinks: &Vec<config::Sink>,
          sigint: Arc<AtomicBool>)
          -> Result<usize, Box<Error>> {
     let mut proc_size = 0;
+    let mut batch_count = 0;
+    let start = time::now_utc().to_timespec().sec;
 
     loop {
         if sigint.load(Ordering::Relaxed) {
@@ -137,6 +139,7 @@ fn route(sinks: &Vec<config::Sink>,
         }
 
         proc_size += metrics.len();
+        batch_count += 1;
 
         // Nothing to do
         if files.len() == 0 {
@@ -153,6 +156,7 @@ fn route(sinks: &Vec<config::Sink>,
                 debug!("open tmp sink file {}", format!("{:?}", sink_file));
                 sink_files.push(try!(File::create(sink_file)));
             }
+
 
             // Write metrics
             debug!("write sink files");
@@ -182,9 +186,8 @@ fn route(sinks: &Vec<config::Sink>,
         }
 
         // Rotate
-        let now = time::now_utc().to_timespec().sec;
         for sink in sinks {
-            let dest_file = dir.join(format!("{}-{}.metrics", sink.name, now));
+            let dest_file = dir.join(format!("{}-{}-{}.metrics", sink.name, start, batch_count));
             debug!("rotate tmp sink file to {}", format!("{:?}", dest_file));
             try!(fs::rename(dir.join(format!("{}.tmp", sink.name)), dest_file));
         }
