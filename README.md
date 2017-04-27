@@ -33,7 +33,7 @@ Beamium can have none to many Prometheus endpoints. A *source* is defined as fol
 sources: # Sources definitions (Optional)
   source1:                             # Source name                  (Required)
     url: http://127.0.0.1:9100/metrics # Prometheus endpoint          (Required)
-    period: 10000                      # Polling interval             (Required)
+    period: 10000                      # Polling interval(ms)         (Required)
     format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])
     metrics:                           # Filter fetched metrics       (Optional)
       - node.*                         # Regex used to select metrics (Required)
