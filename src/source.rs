@@ -134,7 +134,7 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     let timestamp = tokens.next()
         .map(|v| {
             i64::from_str_radix(v, 10)
-                .map(|v| v * 1000 * 1000)
+                .map(|v| v * 1000)
                 .unwrap_or(now)
         })
         .unwrap_or(now);
