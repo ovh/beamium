@@ -1,8 +1,8 @@
-# Beamium - Prometheus to Warp10 metrics forwarder
+# Beamium - /metrics scraper (Warp10 & Prometheus) with DFO buffering, and Warp10 forward.
 [![version](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/runabove/beamium)
 [![Build Status](https://travis-ci.org/runabove/beamium.svg?branch=master)](https://travis-ci.org/runabove/beamium)
 
-Beamium collect metrics from Prometheus endpoints and forward them to Warp10 data platform.
+Beamium collect metrics from /metrics HTTP endpoints (with support for Prometheus & Warp 10 format) and forward them to Warp10 data platform. While acquiring metrics, Beamium uses DFO (Disk Fail Over) to prevent metrics loss due to eventual network issues or unavailable service.
 
 Beamium is written in Rust to ensure efficiency, a very low footprint and deterministic performances.
 
@@ -11,6 +11,20 @@ Beamium key points:
  - **Reliable**: Beamium handle network failure. Never lose data. We guarantee void proof graph ;)
  - **Versatile**: Beamium can also fetch metrics from a directory.
  - **Powerful**: Beamium is able to filter metrics and to send them to multiple Warp10 platforms.
+
+## How it works?
+
+Scraper (optionals) will collect metrics from defined endpoints. They will store them into the source_dir.
+Beamium will read files inside source_dir, and will fan out them according to the provided selector into sink_dir.
+Finaly Beamium will push files from the sink_dir to the defined sinks.
+
+The pipeline can be describe this way :
+
+    HTTP /metrics endpoint --scrape--> source_dir --route--> sink_dir --forward--> warp10
+
+It also means that given your need, you could produce metrics directly to source/sink directory, example :
+
+    $ TS=`date +%s` && echo $TS"000000// metrics{} true" >> /opt/beamium/data/sources/prefix-$TS.metrics
 
 ## Status
 Beamium is currently under development.
@@ -27,11 +41,11 @@ Beamium come with a [sample config file](config.sample.yaml). Simply copy the sa
 ### Definitions
 Config is composed of four parts:
 
-#### Sources
-Beamium can have none to many Prometheus endpoints. A *source* is defined as follow:
+#### Scrapers
+Beamium can have none to many Prometheus endpoints. A *scraper* is defined as follow:
 ``` yaml
-sources: # Sources definitions (Optional)
-  source1:                             # Source name                  (Required)
+scrapers: # Scrapers definitions (Optional)
+  scraper1:                            # Source name                  (Required)
     url: http://127.0.0.1:9100/metrics # Prometheus endpoint          (Required)
     period: 10000                      # Polling interval(ms)         (Required)
     format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])

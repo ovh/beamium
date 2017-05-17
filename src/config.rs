@@ -20,7 +20,7 @@ use slog;
 #[derive(Clone)]
 /// Config root.
 pub struct Config {
-    pub sources: Vec<Source>,
+    pub scrapers: Vec<Scraper>,
     pub sinks: Vec<Sink>,
     pub labels: HashMap<String, String>,
     pub parameters: Parameters,
@@ -28,19 +28,19 @@ pub struct Config {
 
 #[derive(Debug)]
 #[derive(Clone)]
-/// Source config.
-pub struct Source {
+/// Scraper config.
+pub struct Scraper {
     pub name: String,
     pub url: String,
     pub period: u64,
-    pub format: SourceFormat,
+    pub format: ScraperFormat,
     pub metrics: Option<regex::RegexSet>,
 }
 
 #[derive(Debug)]
 #[derive(Clone)]
-/// Source format.
-pub enum SourceFormat {
+/// Scraper format.
+pub enum ScraperFormat {
     Prometheus,
     Sensision,
 }
@@ -150,7 +150,7 @@ impl error::Error for ConfigError {
 pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
     // Defaults
     let mut config = Config {
-        sources: Vec::new(),
+        scrapers: Vec::new(),
         labels: HashMap::new(),
         sinks: Vec::new(),
         parameters: Parameters {
@@ -191,35 +191,35 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
     let docs = try!(YamlLoader::load_from_str(&contents));
 
     for doc in &docs {
-        if !doc["sources"].is_badvalue() {
-            let sources = try!(doc["sources"]
+        if !doc["scrapers"].is_badvalue() {
+            let scrapers = try!(doc["scrapers"]
                 .as_hash()
-                .ok_or("sources should be a map"));
+                .ok_or("scrapers should be a map"));
 
-            for (k, v) in sources {
+            for (k, v) in scrapers {
                 let name = try!(k.as_str()
-                    .ok_or("sources keys should be a string"));
+                    .ok_or("scrapers keys should be a string"));
                 let url = try!(v["url"]
                     .as_str()
-                    .ok_or(format!("sources.{}.url is required and should be a string", name)));
+                    .ok_or(format!("scrapers.{}.url is required and should be a string", name)));
                 let period = try!(v["period"]
                     .as_i64()
-                    .ok_or(format!("sources.{}.period is required and should be a number", name)));
+                    .ok_or(format!("scrapers.{}.period is required and should be a number", name)));
                 let period = try!(cast::u64(period)
-                    .map_err(|_| format!("sources.{}.period is invalid", name)));
+                    .map_err(|_| format!("scrapers.{}.period is invalid", name)));
                 let format = if v["format"].is_badvalue() {
-                    SourceFormat::Prometheus
+                    ScraperFormat::Prometheus
                 } else {
                     let f = try!(v["format"]
                         .as_str()
-                        .ok_or(format!("sources.{}.format should be a string", name)));
+                        .ok_or(format!("scrapers.{}.format should be a string", name)));
 
                     if f == "prometheus" {
-                        SourceFormat::Prometheus
+                        ScraperFormat::Prometheus
                     } else if f == "sensision" {
-                        SourceFormat::Sensision
+                        ScraperFormat::Sensision
                     } else {
-                        return Err(format!("sources.{}.format should be 'prometheus' or \
+                        return Err(format!("scrapers.{}.format should be 'prometheus' or \
                                            'sensision'",
                                            name)
                             .into());
@@ -239,7 +239,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                     Some(try!(regex::RegexSet::new(&metrics)))
                 };
 
-                config.sources.push(Source {
+                config.scrapers.push(Scraper {
                     name: String::from(name),
                     url: String::from(url),
                     period: period,
