@@ -26,7 +26,7 @@ use nix::sys::signal;
 use std::time::Duration;
 
 mod config;
-mod source;
+mod scraper;
 mod router;
 mod sink;
 mod log;
@@ -96,15 +96,15 @@ fn main() {
 
     // Synchronisation stuff
     let sigint = Arc::new(AtomicBool::new(false));
-    let mut handles = Vec::with_capacity(config.sources.len() + 1 + config.sinks.len());
+    let mut handles = Vec::with_capacity(config.scrapers.len() + 1 + config.sinks.len());
 
-    // Spawn sources
-    info!("spawning sources");
-    for source in config.sources {
+    // Spawn scrapers
+    info!("spawning scrapers");
+    for scraper in config.scrapers {
         let (parameters, sigint) = (config.parameters.clone(), sigint.clone());
         handles.push(thread::spawn(move || {
-            slog_scope::scope(slog_scope::logger().new(o!("source" => source.name.clone())),
-                              || source::source(&source, &parameters, sigint));
+            slog_scope::scope(slog_scope::logger().new(o!("scraper" => scraper.name.clone())),
+                              || scraper::scraper(&scraper, &parameters, sigint));
         }));
     }
 
