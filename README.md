@@ -2,7 +2,7 @@
 [![version](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/runabove/beamium)
 [![Build Status](https://travis-ci.org/runabove/beamium.svg?branch=master)](https://travis-ci.org/runabove/beamium)
 
-Beamium collect metrics from /metrics HTTP endpoints (with support for Prometheus & Warp 10 format) and forward them to Warp10 data platform. While acquiring metrics, Beamium uses DFO (Disk Fail Over) to prevent metrics loss due to eventual network issues or unavailable service.
+Beamium collect metrics from /metrics HTTP endpoints (with support for Prometheus & Warp10/Sensision format) and forward them to Warp10 data platform. While acquiring metrics, Beamium uses DFO (Disk Fail Over) to prevent metrics loss due to eventual network issues or unavailable service.
 
 Beamium is written in Rust to ensure efficiency, a very low footprint and deterministic performances.
 
@@ -42,7 +42,7 @@ Beamium come with a [sample config file](config.sample.yaml). Simply copy the sa
 Config is composed of four parts:
 
 #### Scrapers
-Beamium can have none to many Prometheus endpoints. A *scraper* is defined as follow:
+Beamium can have none to many Prometheus or Warp10/Sensision endpoints. A *scraper* is defined as follow:
 ``` yaml
 scrapers: # Scrapers definitions (Optional)
   scraper1:                            # Source name                  (Required)
