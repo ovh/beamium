@@ -5,10 +5,10 @@ use std::io::prelude::*;
 
 fn main() {
     let output = Command::new("git")
-                        .arg("rev-parse")
-                        .arg("HEAD")
-                        .output()
-                        .expect("failed to execute process");
+        .arg("rev-parse")
+        .arg("HEAD")
+        .output()
+        .expect("failed to execute process");
 
     let hash = String::from_utf8_lossy(&output.stdout);
     let content = format!("static COMMIT: &'static str = {:?};\n", hash.trim());
@@ -18,10 +18,11 @@ fn main() {
     if path.exists() {
         let mut f = File::open(path).expect("fail to open result.rs");
         let mut current = String::new();
-        f.read_to_string(&mut current).expect("fail to read result.rs");
+        f.read_to_string(&mut current)
+            .expect("fail to read result.rs");
 
         if current == content {
-            return
+            return;
         }
     };
 

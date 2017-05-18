@@ -28,7 +28,10 @@ pub fn log(parameters: &config::Parameters, verbose: u64) {
     let drain_term = slog_term::streamer().full().build().ignore_err();
 
     // File drain
-    let log_file = OpenOptions::new().create(true).append(true).open(&parameters.log_file);
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&parameters.log_file);
     if log_file.is_err() {
         crit!("Fail to open log file at {:?}: {}",
               &parameters.log_file,
@@ -46,7 +49,7 @@ pub fn log(parameters: &config::Parameters, verbose: u64) {
     // Setup root logger
     let root_log = Logger::root(Duplicate::new(LevelFilter::new(drain_term, console_level),
                                                LevelFilter::new(file_drain, parameters.log_level))
-                                    .ignore_err(),
+                                        .ignore_err(),
                                 o!());
 
     slog_scope::set_global_logger(root_log);

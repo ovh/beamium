@@ -20,7 +20,9 @@ use config;
 const REST_TIME: u64 = 10;
 
 /// Scraper loop.
-pub fn scraper(scraper: &config::Scraper, parameters: &config::Parameters, sigint: Arc<AtomicBool>) {
+pub fn scraper(scraper: &config::Scraper,
+               parameters: &config::Parameters,
+               sigint: Arc<AtomicBool>) {
     loop {
         let start = time::now_utc();
 
@@ -131,12 +133,9 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     let mut tokens = v.split_whitespace();
 
     let value = try!(tokens.next().ok_or("no value"));
-    let timestamp = tokens.next()
-        .map(|v| {
-            i64::from_str_radix(v, 10)
-                .map(|v| v * 1000)
-                .unwrap_or(now)
-        })
+    let timestamp = tokens
+        .next()
+        .map(|v| i64::from_str_radix(v, 10).map(|v| v * 1000).unwrap_or(now))
         .unwrap_or(now);
 
     // Format class
