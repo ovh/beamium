@@ -116,9 +116,10 @@ fn main() {
                                                    config.parameters.clone(),
                                                    sigint.clone());
         handles.push(thread::spawn(move || {
-            slog_scope::scope(slog_scope::logger().new(o!()),
-                              || router::router(&sinks, &labels, &parameters, sigint));
-        }));
+                                       slog_scope::scope(slog_scope::logger().new(o!()), || {
+                router::router(&sinks, &labels, &parameters, sigint)
+            });
+                                   }));
     }
 
     // Spawn sinks
