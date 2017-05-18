@@ -193,24 +193,26 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
     let config_scraper_keys = ["sources", "scrapers"];
     for doc in &docs {
         for config_scraper_key in config_scraper_keys.iter() {
-            let key = *config_scraper_key; 
+            let key = *config_scraper_key;
             if "sources" == key {
-                warn!("'sources' is deprecated and will be removed in further revision. Please use 'scrapers' instead.")
+                warn!("'sources' is deprecated and will be removed in further revision. \
+                    Please use 'scrapers' instead.",)
             }
             if !doc[key].is_badvalue() {
-                let scrapers = try!(doc[key]
-                    .as_hash()
-                    .ok_or(format!("{} should be a map", key)));
+                let scrapers = try!(doc[key].as_hash().ok_or(format!("{} should be a map", key)));
 
                 for (k, v) in scrapers {
-                    let name = try!(k.as_str()
-                                        .ok_or(format!("{} keys should be a string",key)));
+                    let name = try!(k.as_str().ok_or(format!("{} keys should be a string", key)));
                     let url = try!(v["url"]
-                            .as_str()
-                            .ok_or(format!("scrapers.{}.url is required and should be a string", name)));
+                                 .as_str()
+                                 .ok_or(format!("{}.{}.url is required and should be a string",
+                                                key,
+                                                name)));
                     let period = try!(v["period"]
-                            .as_i64()
-                            .ok_or(format!("scrapers.{}.period is required and should be a number", name)));
+                                 .as_i64()
+                                 .ok_or(format!("{}.{}.period is required and should be a number",
+                                                key,
+                                                name)));
                     let period = try!(cast::u64(period).map_err(|_| {
                         format!("scrapers.{}.period is invalid", name)
                     }));
