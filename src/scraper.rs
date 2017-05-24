@@ -1,6 +1,6 @@
-//! # Source module.
+//! # Scraper module.
 //!
-//! The Source module fetch metrics to Prometheus.
+//! The Scraper module fetch metrics to Prometheus.
 use std::thread;
 use std::time::Duration;
 use std::sync::Arc;
@@ -19,21 +19,23 @@ use config;
 /// Thread sleeping time.
 const REST_TIME: u64 = 10;
 
-/// Source loop.
-pub fn source(source: &config::Source, parameters: &config::Parameters, sigint: Arc<AtomicBool>) {
+/// Scraper loop.
+pub fn scraper(scraper: &config::Scraper,
+               parameters: &config::Parameters,
+               sigint: Arc<AtomicBool>) {
     loop {
         let start = time::now_utc();
 
-        match fetch(source, parameters) {
+        match fetch(scraper, parameters) {
             Err(err) => error!("fetch fail: {}", err),
             Ok(_) => info!("fetch success"),
         }
 
         let elapsed = (time::now_utc() - start).num_milliseconds() as u64;
-        let sleep_time = if elapsed > source.period {
+        let sleep_time = if elapsed > scraper.period {
             REST_TIME
         } else {
-            cmp::max(source.period - elapsed, REST_TIME)
+            cmp::max(scraper.period - elapsed, REST_TIME)
         };
         for _ in 0..sleep_time / REST_TIME {
             thread::sleep(Duration::from_millis(REST_TIME));
@@ -45,15 +47,15 @@ pub fn source(source: &config::Source, parameters: &config::Parameters, sigint: 
 }
 
 /// Fetch retrieve metrics from Prometheus.
-fn fetch(source: &config::Source, parameters: &config::Parameters) -> Result<(), Box<Error>> {
-    debug!("fetch {}", &source.url);
+fn fetch(scraper: &config::Scraper, parameters: &config::Parameters) -> Result<(), Box<Error>> {
+    debug!("fetch {}", &scraper.url);
 
     // Fetch metrics
     let mut client = hyper::Client::new();
     client.set_write_timeout(Some(Duration::from_secs(parameters.timeout)));
     client.set_read_timeout(Some(Duration::from_secs(parameters.timeout)));
 
-    let mut res = try!(client.get(&source.url).send());
+    let mut res = try!(client.get(&scraper.url).send());
     if !res.status.is_success() {
         return Err(From::from("non 200 received"));
     }
@@ -69,16 +71,16 @@ fn fetch(source: &config::Source, parameters: &config::Parameters) -> Result<(),
     let now = start.to_timespec().sec * 1000 * 1000 + (start.to_timespec().nsec as i64 / 1000);
 
     let dir = Path::new(&parameters.source_dir);
-    let temp_file = dir.join(format!("{}.tmp", source.name));
+    let temp_file = dir.join(format!("{}.tmp", scraper.name));
     debug!("write to tmp file {}", format!("{:?}", temp_file));
     {
         // Open tmp file
         let mut file = try!(File::create(&temp_file));
 
         for line in body.lines() {
-            let line = match source.format {
-                config::SourceFormat::Sensision => String::from(line.trim()),
-                config::SourceFormat::Prometheus => {
+            let line = match scraper.format {
+                config::ScraperFormat::Sensision => String::from(line.trim()),
+                config::ScraperFormat::Prometheus => {
                     match format_prometheus(line.trim(), now) {
                         Err(_) => {
                             warn!("bad row {}", &line);
@@ -93,8 +95,8 @@ fn fetch(source: &config::Source, parameters: &config::Parameters) -> Result<(),
                 continue;
             }
 
-            if source.metrics.is_some() {
-                if !source.metrics.as_ref().unwrap().is_match(&line) {
+            if scraper.metrics.is_some() {
+                if !scraper.metrics.as_ref().unwrap().is_match(&line) {
                     continue;
                 }
             }
@@ -106,8 +108,8 @@ fn fetch(source: &config::Source, parameters: &config::Parameters) -> Result<(),
         try!(file.flush());
     }
 
-    // Rotate source file
-    let dest_file = dir.join(format!("{}-{}.metrics", source.name, now));
+    // Rotate scraped file
+    let dest_file = dir.join(format!("{}-{}.metrics", scraper.name, now));
     debug!("rotate tmp file to {}", format!("{:?}", dest_file));
     try!(fs::rename(&temp_file, &dest_file));
 
@@ -131,12 +133,9 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     let mut tokens = v.split_whitespace();
 
     let value = try!(tokens.next().ok_or("no value"));
-    let timestamp = tokens.next()
-        .map(|v| {
-            i64::from_str_radix(v, 10)
-                .map(|v| v * 1000)
-                .unwrap_or(now)
-        })
+    let timestamp = tokens
+        .next()
+        .map(|v| i64::from_str_radix(v, 10).map(|v| v * 1000).unwrap_or(now))
         .unwrap_or(now);
 
     // Format class

@@ -26,7 +26,8 @@ pub fn router(sinks: &Vec<config::Sink>,
               parameters: &config::Parameters,
               sigint: Arc<AtomicBool>) {
 
-    let labels: String = labels.iter()
+    let labels: String = labels
+        .iter()
         .fold(String::new(), |acc, (k, v)| {
             let sep = if acc.is_empty() { "" } else { "," };
             acc + sep + k + "=" + v
@@ -126,10 +127,10 @@ fn route(sinks: &Vec<config::Sink>,
 
                 let slabels = labels.clone() +
                               if plabels.trim().starts_with("}") {
-                    ""
-                } else {
-                    ","
-                } + &plabels;
+                                  ""
+                              } else {
+                                  ","
+                              } + &plabels;
 
                 metrics.push(format!("{}{{{}", class, slabels))
             }
@@ -169,8 +170,8 @@ fn route(sinks: &Vec<config::Sink>,
                     if sink.selector.is_some() {
                         let selector = sink.selector.as_ref().unwrap();
                         if !line.split_whitespace()
-                            .nth(1)
-                            .map_or(false, |class| selector.is_match(class)) {
+                                .nth(1)
+                                .map_or(false, |class| selector.is_match(class)) {
                             continue;
                         }
                     }
