@@ -1,6 +1,6 @@
 [package]
 name = "beamium"
-version = "1.4.2"
+version = "1.5.0"
 authors = [ "d33d33 <kevin.georges@corp.ovh.com>" ]
 
 build = "build.rs"
