@@ -24,6 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::fs;
 use nix::sys::signal;
 use std::time::Duration;
+use std::path::Path;
 
 mod config;
 mod scraper;
@@ -76,6 +77,18 @@ fn main() {
     let config = config.ok().unwrap();
 
     // Setup logging
+    let log_path = Path::new(&config.parameters.log_file).parent();
+    if log_path.is_some() {
+        let log_path = log_path.unwrap();
+        info!(format!("{}", log_path.display()));
+        let dir = fs::create_dir_all(&log_path);
+        if dir.is_err() {
+            crit!("Fail to create log directory {}: {}",
+                  log_path.display(),
+                  dir.err().unwrap());
+            std::process::exit(-1);
+        }
+    }
     log::log(&config.parameters, matches.occurrences_of("v"));
 
     // Ensure dirs
