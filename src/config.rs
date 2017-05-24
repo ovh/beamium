@@ -194,11 +194,12 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
     for doc in &docs {
         for config_scraper_key in config_scraper_keys.iter() {
             let key = *config_scraper_key;
-            if "sources" == key {
-                warn!("'sources' is deprecated and will be removed in further revision. \
-                    Please use 'scrapers' instead.",)
-            }
             if !doc[key].is_badvalue() {
+                if "sources" == key {
+                    warn!("'sources' is deprecated and will be removed in further revision. \
+                        Please use 'scrapers' instead.",)
+                }
+
                 let scrapers = try!(doc[key].as_hash().ok_or(format!("{} should be a map", key)));
 
                 for (k, v) in scrapers {
