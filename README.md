@@ -1,5 +1,5 @@
 # Beamium - /metrics scraper (Warp10 & Prometheus) with DFO buffering, and Warp10 forward.
-[![version](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/runabove/beamium)
+[![GitHub release](https://img.shields.io/github/release/runabove/beamium.svg)]()
 [![Build Status](https://travis-ci.org/runabove/beamium.svg?branch=master)](https://travis-ci.org/runabove/beamium)
 
 Beamium collect metrics from /metrics HTTP endpoints (with support for Prometheus & Warp10/Sensision format) and forward them to Warp10 data platform. While acquiring metrics, Beamium uses DFO (Disk Fail Over) to prevent metrics loss due to eventual network issues or unavailable service.
@@ -24,7 +24,7 @@ The pipeline can be describe this way :
 
 It also means that given your need, you could produce metrics directly to source/sink directory, example :
 
-    $ TS=`date +%s` && echo $TS"000000// metrics{} true" >> /opt/beamium/data/sources/prefix-$TS.metrics
+    $ TS=`date +%s` && echo $TS"000000// metrics{} T" >> /opt/beamium/data/sources/prefix-$TS.metrics
 
 ## Status
 Beamium is currently under development.
