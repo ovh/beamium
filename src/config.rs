@@ -158,7 +158,7 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
             scan_period: 1000,
             sink_dir: String::from("sinks"),
             source_dir: String::from("sources"),
-            batch_size: 200000,
+            batch_size: 10000000,
             batch_count: 250,
             log_file: String::from(env!("CARGO_PKG_NAME")) + ".log",
             log_level: slog::Level::Info,
