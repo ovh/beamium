@@ -16,6 +16,7 @@ extern crate slog_term;
 extern crate slog_stream;
 extern crate slog_json;
 extern crate nix;
+extern crate flate2;
 
 use clap::App;
 use std::thread;
@@ -138,11 +139,8 @@ fn main() {
     // Spawn sinks
     info!("spawning sinks");
     for sink in config.sinks {
-        let (parameters, sigint) = (config.parameters.clone(), sigint.clone());
-        handles.push(thread::spawn(move || {
-            slog_scope::scope(slog_scope::logger().new(o!("sink" => sink.name.clone())),
-                              || sink::sink(&sink, &parameters, sigint));
-        }));
+        let mut s = sink::Sink::new(&sink, &config.parameters);
+        s.start();
     }
 
     info!("started");
