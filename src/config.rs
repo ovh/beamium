@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use regex;
 use slog;
 
+pub const REST_TIME: u64 = 10;
+
 #[derive(Debug)]
 #[derive(Clone)]
 /// Config root.
@@ -57,6 +59,7 @@ pub struct Sink {
     pub selector: Option<regex::Regex>,
     pub ttl: u64,
     pub size: u64,
+    pub parallel: u64,
 }
 
 #[derive(Debug)]
@@ -210,10 +213,10 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                                                 key,
                                                 name)));
                     let period = try!(v["period"]
-                                 .as_i64()
-                                 .ok_or(format!("{}.{}.period is required and should be a number",
-                                                key,
-                                                name)));
+                        .as_i64()
+                        .ok_or(format!("{}.{}.period is required and should be a number",
+                                       key,
+                                       name)));
                     let period = try!(cast::u64(period).map_err(|_| {
                         format!("scrapers.{}.period is invalid", name)
                     }));
@@ -244,7 +247,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                             try!(v["metrics"].as_vec().ok_or("metrics should be an array"));
                         for v in values {
                             let value = try!(regex::Regex::new(try!(v.as_str()
-                                    .ok_or(format!("metrics.{} is invalid", name)))));
+                                .ok_or(format!("metrics.{} is invalid", name)))));
                             metrics.push(String::from(r"^(\S*)\s") + value.as_str());
                         }
 
@@ -320,6 +323,18 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                     }))
                 };
 
+                let parallel = if v["parallel"].is_badvalue() {
+                    1
+                } else {
+                    let parallel = try!(v["parallel"]
+                                            .as_i64()
+                                            .ok_or(format!("sinks.{}.parallel should be a number",
+                                                           name)));
+                    try!(cast::u64(parallel).map_err(|_| {
+                        format!("sinks.{}.parallel should be a positive number", name)
+                    }))
+                };
+
                 config
                     .sinks
                     .push(Sink {
@@ -330,6 +345,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                               selector: selector,
                               ttl: ttl,
                               size: size,
+                              parallel: parallel,
                           })
             }
         }
@@ -408,10 +424,9 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
             }
 
             if !doc["parameters"]["timeout"].is_badvalue() {
-                let timeout =
-                    try!(doc["parameters"]["timeout"]
-                             .as_i64()
-                             .ok_or(format!("parameters.timeout should be a number",)));
+                let timeout = try!(doc["parameters"]["timeout"]
+                                       .as_i64()
+                                       .ok_or("parameters.timeout should be a number"));
                 let timeout = try!(cast::u64(timeout)
                                        .map_err(|_| format!("parameters.timeout is invalid")));
                 config.parameters.timeout = timeout;
