@@ -29,6 +29,15 @@ It also means that given your need, you could produce metrics directly to source
 ## Status
 Beamium is currently under development.
 
+## Install
+We provide deb packages for Beamium!
+```
+sudo lsb_release -a | grep Codename | awk '{print "deb http://last.public.ovh.metrics.snap.mirrors.ovh.net/debian " $2 " main"}' >> /etc/apt/sources.list.d/beamium.list
+sudo apt-key adv --recv-keys --keyserver http://last.public.ovh.metrics.snap.mirrors.ovh.net/pub.key A7F0D217C80D5BB8
+sudo apt-get update
+sudo apt-get install beamium
+```
+
 ## Building
 Beamium is pretty easy to build.
  - Clone the repository
