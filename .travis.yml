@@ -1,18 +1,25 @@
 language: rust
-
 rust:
-  - stable
-  - beta
-  - nightly
-
+- stable
+- beta
+- nightly
 matrix:
   allow_failures:
-    - rust: nightly
-
+  - rust: nightly
 before_script:
-  - PATH=$PATH:/home/travis/.cargo/bin
-  - cargo install rustfmt
-
+- PATH=$PATH:/home/travis/.cargo/bin
+- cargo install rustfmt
 script:
-  - cargo fmt checkstyle
-  - cargo build --verbose
+- cargo fmt checkstyle
+- cargo build --verbose
+before_deploy: "cargo build --release"
+deploy:
+  provider: releases
+  api_key:
+    secure: cbVPXdowaY7r6K2qLuSenc4GbGB6NpUOxfd3u3kAlqvaOK/cOLb+yFPQiskDK3AOidBGZf+Ywb5q60Rowu0nCWxM68ficS/mOOdR9/FvOroQR9mZDUHGyhGAUQ5V95eqqZsgJ6YDy023RIZzOe1nRSuaaDtmFIvMw2ba0gZnWLArE8Qp4XnM/zRWB+2SGg5i4aXsBxnKwFNFZ2f9spjq95XHtOwvDnesRmtEA0Uqh1A8amrWO226Obgd1K4AawhsEdQs5TGuSo5NdP6dmnvmkXmAHQuYOH+srZlWv/9eYkQNhNGeIaWyGZrU4Obf9tazrEPuVixBh5CpVZ73NaD4mpGRJqlogHkmdln4/3mMofIss0ZT+nHaygd2/OYg3S90S1wXURnUHoWR2gqqhLn8C3cye6ubE72zBZMIuU1qTcoLuVM72HoFF9YIWSB9Fq4j+eq7entSsLss2rI5qhnLOJdGp3bqyqkUHIrhSBk03U56RX3Twn9BziF30h6IQ/Khsm8UsuPWwkKBFKZUlPuWFKba51r2eU+77tcFtDNk5v+sFyMj47chhrfn57XRzRuJdQtNvij0GFhcMH/8GufWyS5H2BTmYldrj9V5+hP5krN7UT7ZPOxMpdTfkrVtTy2qtDx6Hzg2sl4EieZjsXx7jqrDmxr1YkPbghJ8fNCYOZs=
+  file: target/release/beamium
+  skip_cleanup: true
+  on:
+    repo: runabove/beamium
+    branch: master
+    tags: true
