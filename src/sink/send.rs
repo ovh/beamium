@@ -139,10 +139,15 @@ impl Data {
         todo.pop_front()
     }
 
-    fn load_file(&self, path: &PathBuf) -> Result<BufReader<File>, io::Error> {
+    fn load_file(&self, path: &PathBuf) -> Option<BufReader<File>> {
         debug!("load file {}", path.display());
-        let f = File::open(path)?;
-        Ok(BufReader::new(f))
+        match File::open(path) {
+            Err(err) => {
+                error!(err);
+                None
+            }
+            Ok(f) => Some(BufReader::new(f)),
+        }
     }
 }
 
@@ -162,7 +167,7 @@ impl io::Read for Data {
         if self.reader.is_none() && self.processing.is_some() {
             let to_load = self.processing.as_ref().unwrap();
             self.batch_count = self.batch_count - 1;
-            self.reader = Some(self.load_file(to_load)?);
+            self.reader = self.load_file(to_load);
         }
 
         // Chunk by 1M or less
