@@ -11,6 +11,7 @@ use slog_term;
 use slog_json;
 use slog_scope;
 use std::fs::OpenOptions;
+use std::os::unix::fs::OpenOptionsExt;
 use std;
 
 use config;
@@ -31,6 +32,7 @@ pub fn log(parameters: &config::Parameters, verbose: u64) {
     let log_file = OpenOptions::new()
         .create(true)
         .append(true)
+        .mode(0o640)
         .open(&parameters.log_file);
     if log_file.is_err() {
         crit!("Fail to open log file at {:?}: {}",
