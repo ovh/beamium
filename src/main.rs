@@ -23,6 +23,8 @@ use std::thread;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::fs;
+use std::fs::DirBuilder;
+use std::os::unix::fs::DirBuilderExt;
 use nix::sys::signal;
 use std::time::Duration;
 use std::path::Path;
@@ -82,7 +84,12 @@ fn main() {
     if log_path.is_some() {
         let log_path = log_path.unwrap();
         info!(format!("{}", log_path.display()));
-        let dir = fs::create_dir_all(&log_path);
+
+        let dir = DirBuilder::new()
+            .mode(0o750)
+            .recursive(true)
+            .create(&log_path);
+
         if dir.is_err() {
             crit!("Fail to create log directory {}: {}",
                   log_path.display(),
