@@ -9,6 +9,8 @@ use slog::DrainExt;
 use slog_stream;
 use slog_term;
 use slog_json;
+use slog_syslog;
+use slog_syslog::Facility;
 use slog_scope;
 use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
@@ -40,6 +42,7 @@ pub fn log(parameters: &config::Parameters, verbose: u64) {
               log_file.err().unwrap());
         std::process::exit(-1);
     }
+
     let file_drain = slog_stream::async_stream(log_file.unwrap(), slog_json::default())
         .ignore_err();
 
@@ -48,11 +51,24 @@ pub fn log(parameters: &config::Parameters, verbose: u64) {
     let console_level = std::cmp::min(console_level, Level::Trace.as_usize() as u64);
     let console_level = Level::from_usize(console_level as usize).unwrap_or(Level::Trace);
 
-    // Setup root logger
-    let root_log = Logger::root(Duplicate::new(LevelFilter::new(drain_term, console_level),
-                                               LevelFilter::new(file_drain, parameters.log_level))
-                                        .ignore_err(),
-                                o!());
+    if parameters.syslog {
+        let syslog_drain = slog_syslog::unix_3164(Facility::LOG_DAEMON);
 
-    slog_scope::set_global_logger(root_log);
+        let drain = Duplicate::new(
+                        LevelFilter::new(syslog_drain, parameters.log_level),
+                        Duplicate::new(
+                            LevelFilter::new(drain_term, console_level),
+                            LevelFilter::new(file_drain, parameters.log_level)
+                        )
+                    ).ignore_err();
+
+        slog_scope::set_global_logger(Logger::root(drain, o!()));
+    } else {
+        let drain = Duplicate::new(
+                        LevelFilter::new(drain_term, console_level),
+                        LevelFilter::new(file_drain, parameters.log_level)
+                    ).ignore_err();
+
+        slog_scope::set_global_logger(Logger::root(drain, o!()));
+    }
 }
