@@ -73,6 +73,7 @@ pub struct Parameters {
     pub batch_count: u64,
     pub log_file: String,
     pub log_level: slog::Level,
+    pub syslog: bool,
     pub timeout: u64,
 }
 
@@ -165,6 +166,7 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
             batch_count: 250,
             log_file: String::from(env!("CARGO_PKG_NAME")) + ".log",
             log_level: slog::Level::Info,
+            syslog: false,
             timeout: 300,
         },
     };
@@ -423,6 +425,13 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 config.parameters.log_level = log_level;
             }
 
+            if !doc["parameters"]["syslog"].is_badvalue() {
+                let syslog = try!(doc["parameters"]["syslog"]
+                                       .as_bool()
+                                       .ok_or("parameters.bool should be a boolean"));
+                config.parameters.syslog = syslog;
+
+            }
             if !doc["parameters"]["timeout"].is_badvalue() {
                 let timeout = try!(doc["parameters"]["timeout"]
                                        .as_i64()

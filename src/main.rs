@@ -15,6 +15,7 @@ extern crate slog_scope;
 extern crate slog_term;
 extern crate slog_stream;
 extern crate slog_json;
+extern crate slog_syslog;
 extern crate nix;
 extern crate flate2;
 
