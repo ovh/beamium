@@ -26,7 +26,7 @@ pub struct Sink<'a> {
     token_header: &'a String,
     url: &'a String,
     batch_count: u64,
-    batch_size: i64,
+    batch_size: u64,
     max_size: u64,
     ttl: u64,
     parallel: u64,
