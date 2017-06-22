@@ -69,7 +69,7 @@ pub struct Parameters {
     pub scan_period: u64,
     pub sink_dir: String,
     pub source_dir: String,
-    pub batch_size: i64,
+    pub batch_size: u64,
     pub batch_count: u64,
     pub log_file: String,
     pub log_level: slog::Level,
@@ -393,8 +393,8 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 let batch_size = try!(doc["parameters"]["batch-size"]
                     .as_i64()
                     .ok_or(format!("parameters.batch-size should be a number")));
-                //let batch_size = try!(cast::u64(batch_size)
-                //    .map_err(|_| format!("parameters.batch-size is invalid")));
+                let batch_size = try!(cast::u64(batch_size)
+                    .map_err(|_| format!("parameters.batch-size is invalid")));
                 config.parameters.batch_size = batch_size;
             }
 
@@ -427,8 +427,8 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
 
             if !doc["parameters"]["syslog"].is_badvalue() {
                 let syslog = try!(doc["parameters"]["syslog"]
-                                       .as_bool()
-                                       .ok_or("parameters.bool should be a boolean"));
+                                      .as_bool()
+                                      .ok_or("parameters.bool should be a boolean"));
                 config.parameters.syslog = syslog;
 
             }
