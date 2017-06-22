@@ -29,7 +29,7 @@ pub fn send_thread(token: &str,
                    todo: Arc<Mutex<VecDeque<PathBuf>>>,
                    timeout: u64,
                    batch_count: u64,
-                   batch_size: u64,
+                   batch_size: i64,
                    sigint: Arc<AtomicBool>) {
     loop {
         Data::new(sigint.clone(), todo.clone(), batch_count, batch_size)
@@ -96,7 +96,7 @@ fn send(token: &str,
 
 struct Data {
     batch_count: u64,
-    batch_size: u64,
+    batch_size: i64,
     sigint: Arc<AtomicBool>,
     todo: Arc<Mutex<VecDeque<PathBuf>>>,
     processing: Option<PathBuf>,
@@ -111,7 +111,7 @@ impl Data {
     pub fn new(sigint: Arc<AtomicBool>,
                todo: Arc<Mutex<VecDeque<PathBuf>>>,
                batch_count: u64,
-               batch_size: u64)
+               batch_size: i64)
                -> Option<Data> {
         let mut d = Data {
             sigint: sigint,
@@ -219,7 +219,7 @@ impl io::Read for Data {
             }
         }
 
-        self.batch_size = self.batch_size - idx as u64;
+        self.batch_size = self.batch_size - idx as i64;
 
         Ok(idx as usize)
     }
