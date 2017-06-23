@@ -1,0 +1,12 @@
+Source: beamium
+Section: default
+Priority: extra
+Maintainer: Aurélien Nephtali <aurelien.nephtali@corp.ovh.com>
+Build-Depends: debhelper (>= 8.0.0),
+Standards-Version: 3.9.6
+Homepage: https://github.com/runabove/beamium
+
+Package: beamium
+Architecture: amd64
+Depends: logrotate
+Description: Prometheus to Warp10 metrics forwarder

@@ -1,0 +1,17 @@
+beamium (1.6.3-1) master; urgency=medium
+
+  * Update to 1.6.3
+
+ -- Aurélien Nephtali <aurelien.nephtali@corp.ovh.com>  Thu, 22 Jun 2017 11:45:28 +0200
+
+beamium (1.6.2-1) master; urgency=medium
+
+  * Update to 1.6.2
+
+ -- Aurélien Nephtali <aurelien.nephtali@corp.ovh.com>  Wed, 21 Jun 2017 10:29:57 +0200
+
+beamium (1.5.1-1) master; urgency=medium
+
+  * Debian package
+
+ -- Aurélien Nephtali <aurelien.nephtali@corp.ovh.com>  Mon, 12 Jun 2017 12:08:19 +0200

@@ -1,0 +1,13 @@
+[Unit]
+Description=beamium
+After=network.target
+
+[Service]
+EnvironmentFile=-/etc/default/beamium
+ExecStart=/bin/bash -c "if [ \"x$START_ON_INSTALL\" = \"xtrue\" -o \"x$START_ON_INSTALL\" = \"xyes\" -o \"x$START_ON_INSTALL\" = \"x0\" ] ; then /usr/bin/beamium --config=/etc/beamium/config.yaml; else /bin/echo \"beamium not configured to start, please edit /etc/default/beamium to enable\"; fi"
+Restart=on-failure
+User=beamium
+Group=beamium
+
+[Install]
+WantedBy=multi-user.target
