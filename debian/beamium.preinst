@@ -1,0 +1,22 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    install)
+        # create a beamium group and user
+        if ! getent passwd beamium >/dev/null 2>&1; then
+            adduser --system --group --no-create-home --home /opt/beamium beamium
+        fi
+    ;;
+
+    upgrade)
+    ;;
+
+    *)
+        echo "preinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

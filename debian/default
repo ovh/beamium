@@ -1,0 +1,6 @@
+# Tell the postinst not to start the service (first install/not configured)
+# comment it once configured
+START_ON_INSTALL=false
+
+# Configure restart on package upgrade (true, every other setting will lead to not restarting)
+#RESTART_ON_UPGRADE=true
