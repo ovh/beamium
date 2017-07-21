@@ -141,6 +141,7 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     // Format class
     let mut parts = class.splitn(2, "{");
     let class = String::from(try!(parts.next().ok_or("no_class")));
+    let class = class.trim();
     let plabels = parts.next();
     let slabels = if plabels.is_some() {
         let mut labels = plabels.unwrap().split("\",")
