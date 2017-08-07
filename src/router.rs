@@ -68,7 +68,8 @@ fn route(sinks: &Vec<config::Sink>,
          -> Result<usize, Box<Error>> {
     let mut proc_size = 0;
     let mut batch_count = 0;
-    let start = time::now_utc().to_timespec().sec;
+    let start = time::now_utc().to_timespec();
+    let run_id = format!("{}#{}", start.sec, start.nsec);
 
     loop {
         if sigint.load(Ordering::Relaxed) {
@@ -188,7 +189,7 @@ fn route(sinks: &Vec<config::Sink>,
 
         // Rotate
         for sink in sinks {
-            let dest_file = dir.join(format!("{}-{}-{}.metrics", sink.name, start, batch_count));
+            let dest_file = dir.join(format!("{}-{}-{}.metrics", sink.name, run_id, batch_count));
             debug!("rotate tmp sink file to {}", format!("{:?}", dest_file));
             try!(fs::rename(dir.join(format!("{}.tmp", sink.name)), dest_file));
         }
