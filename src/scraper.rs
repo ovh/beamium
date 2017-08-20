@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use time;
 use std::cmp;
 use hyper;
+use hyper_native_tls::NativeTlsClient;
 use std::io::prelude::*;
 use std::fs;
 use std::fs::File;
@@ -51,7 +52,10 @@ fn fetch(scraper: &config::Scraper, parameters: &config::Parameters) -> Result<(
     debug!("fetch {}", &scraper.url);
 
     // Fetch metrics
-    let mut client = hyper::Client::new();
+    let ssl = NativeTlsClient::new().unwrap();
+    let connector = hyper::net::HttpsConnector::new(ssl);
+    let mut client = hyper::Client::with_connector(connector);
+  
     client.set_write_timeout(Some(Duration::from_secs(parameters.timeout)));
     client.set_read_timeout(Some(Duration::from_secs(parameters.timeout)));
 
