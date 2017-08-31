@@ -20,6 +20,6 @@ deploy:
   file: target/release/beamium
   skip_cleanup: true
   on:
-    repo: runabove/beamium
+    repo: ovh/beamium
     branch: master
     tags: true
