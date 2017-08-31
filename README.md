@@ -1,6 +1,6 @@
 # Beamium - /metrics scraper (Warp10 & Prometheus) with DFO buffering, and Warp10 forward.
-[![GitHub release](https://img.shields.io/github/release/runabove/beamium.svg)]()
-[![Build Status](https://travis-ci.org/runabove/beamium.svg?branch=master)](https://travis-ci.org/runabove/beamium)
+[![GitHub release](https://img.shields.io/github/release/ovh/beamium.svg)]()
+[![Build Status](https://travis-ci.org/ovh/beamium.svg?branch=master)](https://travis-ci.org/ovh/beamium)
 
 Beamium collect metrics from /metrics HTTP endpoints (with support for Prometheus & Warp10/Sensision format) and forward them to Warp10 data platform. While acquiring metrics, Beamium uses DFO (Disk Fail Over) to prevent metrics loss due to eventual network issues or unavailable service.
 
