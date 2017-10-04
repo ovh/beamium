@@ -42,7 +42,13 @@ sudo apt-get install beamium
 Beamium is pretty easy to build.
  - Clone the repository
  - Setup a minimal working config (see below)
- - Build and run `cargo run`
+ - Install rust compile tools with `curl https://sh.rustup.rs -sSf | sh`
+ - Then `source ~/.cargo/bin`
+ - Build with `cargo build`
+ - Finally, run `cargo run`
+
+If you have already rust:
+ - `cargo install --git https://github.com/runabove/beamium`
 
 ## Configuration
 Beamium come with a [sample config file](config.sample.yaml). Simply copy the sample to *config.yaml*, replace `WARP10_ENDPOINT` and `WARP10_TOKEN`, launch Beamiun and you are ready to go!
