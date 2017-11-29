@@ -38,6 +38,7 @@ pub struct Scraper {
     pub period: u64,
     pub format: ScraperFormat,
     pub metrics: Option<regex::RegexSet>,
+    pub headers: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -254,6 +255,22 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                         Some(try!(regex::RegexSet::new(&metrics)))
                     };
 
+                    // let headers = HashMap::new();
+                    let headers = if v["headers"].is_badvalue() {
+                        HashMap::new()
+                    } else {
+                        let heads = try!(v["headers"].as_hash().ok_or("headers should be a map"));
+                        let mut ret = HashMap::new();
+                        for (k, v) in heads {
+                            let name = try!(k.as_str().ok_or("headers keys should be a string"));
+                            let value = try!(v.as_str().ok_or(format!("headers.{} value should be a string",
+                                                                      name)));
+                            ret.insert(String::from(name), String::from(value));
+                        }
+
+                        ret
+                    };
+
                     config
                         .scrapers
                         .push(Scraper {
@@ -262,6 +279,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                                   period: period,
                                   format: format,
                                   metrics: metrics,
+                                  headers: headers
                               })
                 }
             }
