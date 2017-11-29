@@ -48,7 +48,7 @@ Beamium is pretty easy to build.
  - Finally, run `cargo run`
 
 If you have already rust:
- - `cargo install --git https://github.com/runabove/beamium`
+ - `cargo install --git https://github.com/ovh/beamium`
 
 ## Configuration
 Beamium come with a [sample config file](config.sample.yaml). Simply copy the sample to *config.yaml*, replace `WARP10_ENDPOINT` and `WARP10_TOKEN`, launch Beamiun and you are ready to go!
