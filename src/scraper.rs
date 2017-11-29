@@ -55,11 +55,16 @@ fn fetch(scraper: &config::Scraper, parameters: &config::Parameters) -> Result<(
     let ssl = NativeTlsClient::new().unwrap();
     let connector = hyper::net::HttpsConnector::new(ssl);
     let mut client = hyper::Client::with_connector(connector);
+    let mut headers = hyper::header::Headers::new();
   
     client.set_write_timeout(Some(Duration::from_secs(parameters.timeout)));
     client.set_read_timeout(Some(Duration::from_secs(parameters.timeout)));
 
-    let mut res = try!(client.get(&scraper.url).send());
+    for (key, value) in scraper.headers.iter() {
+        headers.set_raw(key.clone(), vec![value.clone().into_bytes()]);
+    }
+
+    let mut res = try!(client.get(&scraper.url).headers(headers).send());
     if !res.status.is_success() {
         return Err(From::from("non 200 received"));
     }
