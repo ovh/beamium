@@ -43,7 +43,7 @@ Beamium is pretty easy to build.
  - Clone the repository
  - Setup a minimal working config (see below)
  - Install rust compile tools with `curl https://sh.rustup.rs -sSf | sh`
- - Then `source ~/.cargo/bin`
+ - Then `source ~/.cargo/env`
  - Build with `cargo build`
  - Finally, run `cargo run`
 
