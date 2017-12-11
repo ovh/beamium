@@ -66,6 +66,9 @@ scrapers: # Scrapers definitions (Optional)
     format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])
     metrics:                           # Filter fetched metrics       (Optional)
       - node.*                         # Regex used to select metrics (Required)
+    headers:                           # Add custom header on request (Optional)
+      X-Toto: tata                     # list of headers to add       (Optional)
+      Authorization: Basic XXXXXXXX
 ```
 
 #### Sinks
