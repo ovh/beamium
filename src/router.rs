@@ -21,28 +21,25 @@ use config;
 const REST_TIME: u64 = 10;
 
 /// Router loop.
-pub fn router(sinks: &Vec<config::Sink>,
-              labels: &HashMap<String, String>,
-              parameters: &config::Parameters,
-              sigint: Arc<AtomicBool>) {
-
-    let labels: String = labels
-        .iter()
-        .fold(String::new(), |acc, (k, v)| {
-            let sep = if acc.is_empty() { "" } else { "," };
-            acc + sep + k + "=" + v
-        });
+pub fn router(
+    sinks: &Vec<config::Sink>,
+    labels: &HashMap<String, String>,
+    parameters: &config::Parameters,
+    sigint: Arc<AtomicBool>,
+) {
+    let labels: String = labels.iter().fold(String::new(), |acc, (k, v)| {
+        let sep = if acc.is_empty() { "" } else { "," };
+        acc + sep + k + "=" + v
+    });
 
     loop {
         let start = time::now_utc();
 
         match route(sinks, parameters, &labels, sigint.clone()) {
             Err(err) => error!("route fail: {}", err),
-            Ok(size) => {
-                if size > 0 {
-                    info!("route success - {}", size)
-                }
-            }
+            Ok(size) => if size > 0 {
+                info!("route success - {}", size)
+            },
         }
 
         let elapsed = (time::now_utc() - start).num_milliseconds() as u64;
@@ -61,11 +58,12 @@ pub fn router(sinks: &Vec<config::Sink>,
 }
 
 /// Route handle sources forwarding.
-fn route(sinks: &Vec<config::Sink>,
-         parameters: &config::Parameters,
-         labels: &String,
-         sigint: Arc<AtomicBool>)
-         -> Result<usize, Box<Error>> {
+fn route(
+    sinks: &Vec<config::Sink>,
+    parameters: &config::Parameters,
+    labels: &String,
+    sigint: Arc<AtomicBool>,
+) -> Result<usize, Box<Error>> {
     let mut proc_size = 0;
     let mut batch_count = 0;
     let start = time::now_utc().to_timespec();
@@ -96,7 +94,7 @@ fn route(sinks: &Vec<config::Sink>,
             debug!("open source file {}", format!("{:?}", entry.path()));
             let file = match read(entry.path()) {
                 Err(err) => {
-                    warn!(err);
+                    warn!("{}", err);
                     continue;
                 }
                 Ok(v) => v,
@@ -126,12 +124,11 @@ fn route(sinks: &Vec<config::Sink>,
                 };
                 let plabels = String::from(plabels);
 
-                let slabels = labels.clone() +
-                              if plabels.trim().starts_with("}") {
-                                  ""
-                              } else {
-                                  ","
-                              } + &plabels;
+                let slabels = labels.clone() + if plabels.trim().starts_with("}") {
+                    ""
+                } else {
+                    ","
+                } + &plabels;
 
                 metrics.push(format!("{}{{{}", class, slabels))
             }
@@ -159,7 +156,6 @@ fn route(sinks: &Vec<config::Sink>,
                 sink_files.push(try!(File::create(sink_file)));
             }
 
-
             // Write metrics
             debug!("write sink files");
             for line in metrics {
@@ -171,8 +167,9 @@ fn route(sinks: &Vec<config::Sink>,
                     if sink.selector.is_some() {
                         let selector = sink.selector.as_ref().unwrap();
                         if !line.split_whitespace()
-                                .nth(1)
-                                .map_or(false, |class| selector.is_match(class)) {
+                            .nth(1)
+                            .map_or(false, |class| selector.is_match(class))
+                        {
                             continue;
                         }
                     }
@@ -191,7 +188,10 @@ fn route(sinks: &Vec<config::Sink>,
         for sink in sinks {
             let dest_file = dir.join(format!("{}-{}-{}.metrics", sink.name, run_id, batch_count));
             debug!("rotate tmp sink file to {}", format!("{:?}", dest_file));
-            try!(fs::rename(dir.join(format!("{}.tmp", sink.name)), dest_file));
+            try!(fs::rename(
+                dir.join(format!("{}.tmp", sink.name)),
+                dest_file
+            ));
         }
 
         // Delete forwarded data
