@@ -53,11 +53,10 @@ fn main() {
         .args_from_usage(
             "-c, --config=[FILE] 'Sets a custom config file'
                               \
-                          -v...                'Increase verbosity level (console only)'",
+                          -v...                'Increase verbosity level (console only)'
+                          -t                   'Test config'",
         )
         .get_matches();
-
-    info!("starting");
 
     // Bootstrap config
     let config_path = matches.value_of("config").unwrap_or("");
@@ -68,6 +67,13 @@ fn main() {
             std::process::abort();
         }
     };
+
+    if matches.is_present("t") {
+        info!("config ok");
+        std::process::exit(0);
+    }
+
+    info!("starting");
 
     // Setup logging
     match log::log(&config.parameters, matches.occurrences_of("v")) {
