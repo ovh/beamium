@@ -8,9 +8,7 @@ matrix:
   - rust: nightly
 before_script:
 - PATH=$PATH:/home/travis/.cargo/bin
-- cargo install rustfmt
 script:
-- cargo fmt checkstyle
 - cargo build --verbose
 before_deploy: "cargo build --release"
 deploy:
