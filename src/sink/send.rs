@@ -1,7 +1,8 @@
-use std::cmp;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fs;
+use std::fmt;
+use std::error;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -10,52 +11,190 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use hyper;
+use hyper_tls::HttpsConnector;
+use hyper_timeout::TimeoutConnector;
+use futures::{Async, Future, Poll, Stream};
+use futures::future::{err, ok};
 use std::time::Duration;
-
 // use flate2::Compression;
 // use flate2::write::ZlibEncoder;
-use hyper;
-use hyper::client::RedirectPolicy;
-use hyper::client::Body::ChunkedBody;
-use hyper::header::Headers;
-use hyper::net::HttpsConnector;
-use hyper_native_tls::NativeTlsClient;
 
 use config;
 
-pub fn send_thread(token: &str,
-                   token_header: &str,
-                   url: &str,
-                   todo: Arc<Mutex<VecDeque<PathBuf>>>,
-                   timeout: u64,
-                   batch_count: u64,
-                   batch_size: u64,
-                   sigint: Arc<AtomicBool>) {
-    loop {
-        Data::new(sigint.clone(), todo.clone(), batch_count, batch_size)
-            .map(|mut data| match send(token, token_header, url, &mut data, timeout) {
-                     Err(err) => {
-                         error!("post fail: {}", err);
+const CHUNK_SIZE: usize = 1024 * 1024;
 
-                         // recover processing file
-                         data.processing.take().map(|p| data.processed.push(p));
-                         let mut todo = data.todo.lock().unwrap();
-                         for entry in data.processed {
-                             debug!("pushback sink file {}", format!("{:?}", entry.display()));
-                             todo.push_front(entry);
-                         }
-                     }
-                     Ok(_) => {
-                         info!("post success - {}", data.sent_lines);
-                         for entry in data.processed {
-                             debug!("delete sink file {}", format!("{:?}", entry.display()));
-                             match fs::remove_file(entry) {
-                                 Err(err) => error!(err),
-                                 Ok(()) => {}
-                             }
-                         }
-                     }
-                 });
+#[derive(Debug)]
+enum SendError {
+    Io(io::Error),
+    Format(Box<Error>),
+    Hyper(hyper::Error),
+}
+
+impl From<io::Error> for SendError {
+    fn from(err: io::Error) -> SendError {
+        SendError::Io(err)
+    }
+}
+impl From<Box<Error>> for SendError {
+    fn from(err: Box<Error>) -> SendError {
+        SendError::Format(err)
+    }
+}
+impl<'a> From<&'a str> for SendError {
+    fn from(err: &str) -> SendError {
+        SendError::Format(From::from(err))
+    }
+}
+impl From<String> for SendError {
+    fn from(err: String) -> SendError {
+        SendError::Format(From::from(err))
+    }
+}
+impl From<hyper::Error> for SendError {
+    fn from(err: hyper::Error) -> SendError {
+        SendError::Hyper(err)
+    }
+}
+
+impl fmt::Display for SendError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SendError::Io(ref err) => err.fmt(f),
+            SendError::Format(ref err) => err.fmt(f),
+            SendError::Hyper(ref err) => err.fmt(f),
+        }
+    }
+}
+
+impl error::Error for SendError {
+    fn description(&self) -> &str {
+        match *self {
+            SendError::Io(ref err) => err.description(),
+            SendError::Format(ref err) => err.description(),
+            SendError::Hyper(ref err) => err.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            SendError::Io(ref err) => Some(err),
+            SendError::Format(ref err) => Some(err.as_ref()),
+            SendError::Hyper(ref err) => Some(err),
+        }
+    }
+}
+
+enum HttpResult {
+    Error(SendError),
+    Ok((hyper::StatusCode, String)),
+}
+
+pub fn send_thread(
+    token: &str,
+    token_header: &str,
+    url: hyper::Uri,
+    todo: Arc<Mutex<VecDeque<PathBuf>>>,
+    timeout: u64,
+    batch_count: u64,
+    batch_size: u64,
+    sigint: Arc<AtomicBool>,
+) {
+    let mut core = ::tokio_core::reactor::Core::new().expect("Fail to start tokio reactor");
+    let handle = core.handle();
+    let connector = HttpsConnector::new(4, &handle).expect("Fail to start https connector");
+
+    // Handle connection timeouts
+    let mut tm = TimeoutConnector::new(connector, &handle);
+    tm.set_connect_timeout(Some(Duration::from_secs(timeout)));
+    tm.set_read_timeout(Some(Duration::from_secs(timeout)));
+    tm.set_write_timeout(Some(Duration::from_secs(timeout)));
+
+    // Client should be shared accross sinks
+    let client = hyper::Client::configure()
+        .keep_alive(true)
+        .connector(tm)
+        .build(&handle);
+
+    loop {
+        Payload::new(sigint.clone(), todo.clone(), batch_count, batch_size).map(|p| {
+            let (tx, body) = hyper::Body::pair();
+
+            let mut req: hyper::Request = hyper::Request::new(hyper::Post, url.clone());
+            req.set_body(body);
+            req.headers_mut().set_raw(String::from(token_header), token);
+
+            info!("Req");
+            let req = client
+                .request(req)
+                .and_then(|res| {
+                    let status = res.status();
+                    // TODO not read body if not debug
+                    let body = res.body()
+                        .fold(String::new(), |mut acc, chunk| {
+                            ok::<String, hyper::Error>({
+                                acc.push_str(&String::from_utf8_lossy(&chunk));
+                                acc
+                            })
+                        })
+                        .or_else(|_| ok(String::new())); // Default body as an empty string
+
+                    ok(status)
+                        .join(body)
+                        .and_then(|res| ok(HttpResult::Ok(res)))
+                })
+                .or_else(|err| ok(HttpResult::Error(SendError::Hyper(err))));
+
+            let pipe = p.forward(tx).and_then(|res| ok(res.0));
+            core.run(req.join(pipe).then(|res| match res {
+                Err(error) => {
+                    crit!("unrecoverable error: {}", error);
+                    err(())
+                }
+                Ok(res) => {
+                    let payload = res.1;
+                    let state = match res.0 {
+                        HttpResult::Ok(result) => {
+                            let status = result.0;
+                            if status.is_success() {
+                                Ok(payload)
+                            } else {
+                                Err(payload)
+                            }
+                        }
+                        HttpResult::Error(error) => {
+                            error!("{}", error);
+                            Err(payload)
+                        }
+                    };
+
+                    match state {
+                        Err(mut payload) => {
+                            // recover processing file
+                            // TODO Must be done in payload
+                            payload.processing.take().map(|p| payload.processed.push(p));
+                            let mut todo = payload.todo.lock().unwrap();
+                            for entry in payload.processed {
+                                debug!("pushback sink file {}", format!("{:?}", entry.display()));
+                                todo.push_front(entry);
+                            }
+                        }
+                        Ok(payload) => {
+                            info!("post success - {}", payload.sent_lines);
+                            // debug!("{}", b);
+                            for entry in payload.processed {
+                                debug!("delete sink file {}", format!("{:?}", entry.display()));
+                                match fs::remove_file(entry) {
+                                    Err(err) => error!("{}", err),
+                                    Ok(()) => {}
+                                }
+                            }
+                        }
+                    };
+                    ok(())
+                }
+            }))
+        });
 
         thread::sleep(Duration::from_millis(config::REST_TIME));
         if sigint.load(Ordering::Relaxed) {
@@ -64,37 +203,7 @@ pub fn send_thread(token: &str,
     }
 }
 
-fn send(token: &str,
-        token_header: &str,
-        url: &str,
-        data: &mut Data,
-        timeout: u64)
-        -> Result<(()), Box<Error>> {
-    // Send metrics
-    let ssl = NativeTlsClient::new().unwrap();
-    let mut client = hyper::Client::with_connector(HttpsConnector::new(ssl));
-    client.set_write_timeout(Some(Duration::from_secs(timeout)));
-    client.set_read_timeout(Some(Duration::from_secs(timeout)));
-    client.set_redirect_policy(RedirectPolicy::FollowAll);
-
-    let mut headers = Headers::new();
-    headers.set_raw(String::from(token_header), vec![token.into()]);
-    // headers.set(ContentEncoding(vec![Encoding::Gzip]));
-
-    let request = client.post(url).headers(headers).body(ChunkedBody(data));
-    let mut res = request.send()?;
-    if !res.status.is_success() {
-        let mut body = String::new();
-        res.read_to_string(&mut body)?;
-        debug!("data {}", &body);
-
-        return Err(From::from(format!("{}", res.status)));
-    }
-
-    Ok(())
-}
-
-struct Data {
+struct Payload {
     batch_count: u64,
     batch_size: i64,
     sigint: Arc<AtomicBool>,
@@ -104,16 +213,16 @@ struct Data {
     reader: Option<BufReader<File>>,
     remaining: String,
     sent_lines: usize,
-    // encoder: ZlibEncoder<Vec<u8>>,
 }
 
-impl Data {
-    pub fn new(sigint: Arc<AtomicBool>,
-               todo: Arc<Mutex<VecDeque<PathBuf>>>,
-               batch_count: u64,
-               batch_size: u64)
-               -> Option<Data> {
-        let mut d = Data {
+impl Payload {
+    pub fn new(
+        sigint: Arc<AtomicBool>,
+        todo: Arc<Mutex<VecDeque<PathBuf>>>,
+        batch_count: u64,
+        batch_size: u64,
+    ) -> Option<Payload> {
+        let mut p = Payload {
             sigint: sigint,
             batch_count: batch_count,
             batch_size: batch_size as i64,
@@ -126,10 +235,10 @@ impl Data {
             // encoder: ZlibEncoder::new(Vec::new(), Compression::Default),
         };
 
-        d.processing = d.get_file();
+        p.processing = p.get_file();
 
-        match d.processing {
-            Some(_) => Some(d),
+        match p.processing {
+            Some(_) => Some(p),
             None => None,
         }
     }
@@ -143,7 +252,7 @@ impl Data {
         debug!("load file {}", path.display());
         match File::open(path) {
             Err(err) => {
-                error!(err);
+                error!("{}", err);
                 None
             }
             Ok(f) => Some(BufReader::new(f)),
@@ -151,11 +260,14 @@ impl Data {
     }
 }
 
-impl io::Read for Data {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        // abort on sigint
-        if self.sigint.load(Ordering::Relaxed) {
-            self.batch_size = 0;
+impl Stream for Payload {
+    type Item = Result<hyper::Chunk, hyper::error::Error>;
+    type Error = Box<Error>;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        // Abort on sigint
+        if self.sigint.load(Ordering::Relaxed) && self.processing.is_none() {
+            return Ok(Async::Ready(None));
         }
 
         // Get a file to process
@@ -171,74 +283,52 @@ impl io::Read for Data {
         }
 
         // Chunk by 1M or less
-        let buf_size = cmp::min(buf.len(), 1024 * 1024);
+        let mut s = String::with_capacity(CHUNK_SIZE);
         let mut idx = 0;
 
         // Process remaining data from previous chunk
         if self.remaining.len() > 0 {
-            idx = move_into(&mut self.remaining, buf, idx)?;
+            idx = self.remaining.len();
+            s.push_str(&self.remaining);
+            s.clear();
         }
 
+        // if self.processing.is_some() {
+        //     Ok(Async::Ready(Some(Ok(hyper::Chunk::from(
+        //         self.load_file_as_bytes(self.processing.as_ref().unwrap())
+        //             .unwrap(),
+        //     )))))
+        // } else {
+        //     Ok(Async::Ready(None))
+        // }
+
         // send file
-        if idx < buf_size && self.reader.is_some() {
-            let mut splitted = false;
-            {
-                let reader = self.reader.as_mut().unwrap();
-                let lines = reader.lines();
-                for line in lines {
-                    let l = line?;
-                    self.sent_lines = self.sent_lines + 1;
-
-                    if idx + l.len() + 2 >= buf_size {
-                        self.remaining.push_str(&l);
-                        self.remaining.push_str("\r\n");
-
-                        idx = move_into(&mut self.remaining, buf, idx)?;
-
-                        splitted = true;
-                        break;
-                    }
-
-                    {
-                        let s = buf.get_mut(idx..idx + l.len())
-                            .ok_or(io::ErrorKind::InvalidData)?;
-                        s.copy_from_slice(l.as_ref());
-                    }
-                    idx = idx + l.len();
-
-                    buf[idx] = '\r' as u8;
-                    buf[idx + 1] = '\n' as u8;
-                    idx = idx + 2;
+        let mut drained = false;
+        if idx < CHUNK_SIZE && self.reader.is_some() {
+            let r = self.reader.as_mut().unwrap();
+            while idx < CHUNK_SIZE {
+                let size = r.read_line(&mut s)?; // TODO handle chunk size overflow
+                if size == 0 {
+                    drained = true; // TODO continue to loop throught new file
+                    break;
                 }
+                idx = idx + size;
+                self.sent_lines = self.sent_lines + 1;
             }
+        }
 
-            // no split occured, entire file has been sent
-            if !splitted {
-                self.reader = None;
-                self.processing.take().map(|p| self.processed.push(p));
-            }
+        if drained {
+            self.reader = None;
+            self.processing.take().map(|p| self.processed.push(p));
+            return Ok(Async::NotReady);
         }
 
         self.batch_size = self.batch_size - idx as i64;
 
-        Ok(idx as usize)
+        if s.len() > 0 {
+            Ok(Async::Ready(Some(Ok(hyper::Chunk::from(s)))))
+        } else {
+            Ok(Async::Ready(None))
+        }
     }
-}
-
-fn move_into(from: &mut String, to: &mut [u8], from_idx: usize) -> io::Result<usize> {
-    let mut sending = cmp::min(to.len() - from_idx, from.len());
-    while !from.is_char_boundary(sending) {
-        sending = sending - 1;
-    }
-
-    let to_idx = from_idx + sending;
-
-    *from = {
-        let (send, remain) = from.split_at(sending);
-        let s = to.get_mut(from_idx..to_idx)
-            .ok_or(io::ErrorKind::InvalidData)?;
-        s.copy_from_slice(send.as_ref());
-        String::from(remain)
-    };
-    Ok(to_idx)
 }

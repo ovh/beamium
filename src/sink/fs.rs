@@ -13,13 +13,15 @@ use time;
 
 use config;
 
-pub fn fs_thread(name: &str,
-                 dir: &str,
-                 period: u64,
-                 todo: Arc<Mutex<VecDeque<PathBuf>>>,
-                 max_size: u64,
-                 ttl: u64,
-                 sigint: Arc<AtomicBool>) {
+pub fn fs_thread(
+    name: &str,
+    dir: &str,
+    period: u64,
+    todo: Arc<Mutex<VecDeque<PathBuf>>>,
+    max_size: u64,
+    ttl: u64,
+    sigint: Arc<AtomicBool>,
+) {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
     loop {
@@ -65,11 +67,12 @@ pub fn fs_thread(name: &str,
     }
 }
 
-fn list(sink_name: &str,
-        dir: &str,
-        files: &HashSet<PathBuf>,
-        ttl: u64)
-        -> Result<(Vec<PathBuf>, Vec<PathBuf>, u64), Box<Error>> {
+fn list(
+    sink_name: &str,
+    dir: &str,
+    files: &HashSet<PathBuf>,
+    ttl: u64,
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>, u64), Box<Error>> {
     let mut sink_name = String::from(sink_name);
     sink_name.push('-');
 
@@ -103,7 +106,7 @@ fn list(sink_name: &str,
                     warn!("skip file {:?}", entry.path());
                     match fs::remove_file(entry.path()) {
                         Ok(()) => {}
-                        Err(err) => error!(err),
+                        Err(err) => error!("{}", err),
                     }
                     return None;
                 }
@@ -127,9 +130,7 @@ fn cappe(actual: u64, target: u64, todo: &Arc<Mutex<VecDeque<PathBuf>>>) -> Resu
     let mut size = actual;
 
     loop {
-        let path = {
-            todo.lock().unwrap().pop_back()
-        };
+        let path = { todo.lock().unwrap().pop_back() };
         if path.is_none() {
             break;
         }
@@ -144,7 +145,6 @@ fn cappe(actual: u64, target: u64, todo: &Arc<Mutex<VecDeque<PathBuf>>>) -> Resu
         if size < target {
             break;
         }
-
     }
 
     Ok(())
