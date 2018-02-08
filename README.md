@@ -1,16 +1,18 @@
-# Beamium - /metrics scraper (Warp10 & Prometheus) with DFO buffering, and Warp10 forward.
+# Beamium - metrics scraper for Warp10 & Prometheus
+
 [![GitHub release](https://img.shields.io/github/release/ovh/beamium.svg)]()
 [![Build Status](https://travis-ci.org/ovh/beamium.svg?branch=master)](https://travis-ci.org/ovh/beamium)
 
-Beamium collect metrics from /metrics HTTP endpoints (with support for Prometheus & Warp10/Sensision format) and forward them to Warp10 data platform. While acquiring metrics, Beamium uses DFO (Disk Fail Over) to prevent metrics loss due to eventual network issues or unavailable service.
+Beamium collect metrics from HTTP endpoints like http://127.0.0.1/metrics and supports Prometheus and Warp10/Sensision format. Once scraped, Beamium can filter and forward data to a Warp10 Time Series platform. While acquiring metrics, Beamium uses DFO (Disk Fail Over) to prevent metrics loss due to eventual network issues or unavailable service.
 
 Beamium is written in Rust to ensure efficiency, a very low footprint and deterministic performances.
 
 Beamium key points:
- - **Simple**: Beamium fetch Prometheus metrics and so benefits from an awesome community.
- - **Reliable**: Beamium handle network failure. Never lose data. We guarantee void proof graph ;)
- - **Versatile**: Beamium can also fetch metrics from a directory.
- - **Powerful**: Beamium is able to filter metrics and to send them to multiple Warp10 platforms.
+ - **Simple**: Beamium is a single binary that does one thing : scraping then pushing.
+ - **Integration**: Beamium fetch Prometheus metrics and so benefits from a large community.
+ - **Reliable**: Beamium handle network failure. Never loose data. We guarantee void proof graph ;)
+ - **Versatile**: Beamium can also scrape metrics from a directory.
+ - **Powerful**: Beamium is able to filter metrics and send them to multiple Warp10 platforms.
 
 ## How it works?
 
