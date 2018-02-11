@@ -36,19 +36,15 @@ CONF_FILE=/etc/beamium/config.yaml
 
 start()
 {
-    if [ "x$START_ON_INSTALL" = "xfalse" ] ; then
-        echo "beamium not configured to start, please edit /etc/default/beamium to enable it."
+    echo -n "Starting $DESC: "
+    start-stop-daemon --chuid ${USER}:${GROUP} \
+        --start --quiet --background \
+        --make-pidfile --pidfile "$PID_FILE" \
+        --exec "$DAEMON" -- --config="$CONF_FILE"
+    if [ $? -ne 0 ] ; then
+        echo "failed."
     else
-        echo -n "Starting $DESC: "
-        start-stop-daemon --chuid ${USER}:${GROUP} \
-                          --start --quiet --background \
-                          --make-pidfile --pidfile "$PID_FILE" \
-                          --exec "$DAEMON" -- --config="$CONF_FILE"
-        if [ $? -ne 0 ] ; then
-            echo "failed."
-        else
-            echo "done."
-        fi
+        echo "done."
     fi
 }
 
