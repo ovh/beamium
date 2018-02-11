@@ -1,3 +1,9 @@
+beamium (1.7.0-1) master; urgency=medium
+
+  * Update to 1.7.0
+
+ -- Aurélien Nephtali <aurelien.nephtali@corp.ovh.com>  Sun, 11 Feb 2018 08:23:52 +0100
+
 beamium (1.6.3-1) master; urgency=medium
 
   * Update to 1.6.3
