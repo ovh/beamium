@@ -45,16 +45,10 @@ case "$1" in
         chown -R beamium:beamium /opt/beamium
         registerService
         STATUS=$(statusService) || true
-        if [ "$STATUS" = "$SERVICE is running." ] && [ ! "$RESTART_ON_UPGRADE" = "true" ] ; then
+        if [ "$STATUS" = "$SERVICE is running." ] ; then
             echo  "$SERVICE is running: not restarting it."
         else
-            if [ "x$START_ON_INSTALL" = "xfalse" ] ; then
-                echo "!!! This is a first install, configure and start it yourself. !!!"
-                echo "!!! Then comment START_ON_INSTALL=false in /etc/default/$SERVICE !!!"
-                echo "!!! And adjust RESTART_ON_UPGRADE if needed !!!"
-            else
-                startService
-            fi
+            startService
         fi
     ;;
 
