@@ -18,15 +18,15 @@ ifeq "${DEBIAN_VERSION}"  "6"
 endif
 
 %:
-		dh $@ ${DH_ARGS}
+	dh $@ ${DH_ARGS}
 
 override_dh_auto_build:
-		cargo build
+	cargo build
 
 override_dh_install:
-		mkdir -p $(CURDIR)/debian/$(PACKAGE)/etc/beamium/
-		cp $(CURDIR)/debian/config.yaml $(CURDIR)/debian/$(PACKAGE)/etc/beamium/
-		dh_install
+	mkdir -p $(CURDIR)/debian/$(PACKAGE)/etc/beamium/
+	cp $(CURDIR)/debian/config.yaml $(CURDIR)/debian/$(PACKAGE)/etc/beamium/
+	dh_install
 
 override_dh_prep:
-		dh_prep -Xdebian/tmp
+	dh_prep -Xdebian/tmp
