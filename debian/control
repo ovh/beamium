@@ -7,6 +7,6 @@ Standards-Version: 3.9.6
 Homepage: https://github.com/runabove/beamium
 
 Package: beamium
-Architecture: amd64
+Architecture: i386 amd64
 Depends: logrotate
 Description: Prometheus to Warp10 metrics forwarder
