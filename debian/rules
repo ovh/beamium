@@ -4,9 +4,9 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-export CARGO_TARGET_DIR=$(CURDIR)/debian/tmp
+BUILD_DIR=$(CURDIR)/debian/tmp
+export CARGO_TARGET_DIR=$(BUILD_DIR)
 
-PACKAGE = $(shell dh_listpackages)
 DEBIAN_VERSION = $(shell lsb_release -rs | cut -d . -f 1)
 DH_ARGS = "--with systemd"
 # do we use systemd?
@@ -24,8 +24,8 @@ override_dh_auto_build:
 	cargo build
 
 override_dh_install:
-	mkdir -p $(CURDIR)/debian/$(PACKAGE)/etc/beamium/
-	cp $(CURDIR)/config.debian.yaml $(CURDIR)/debian/$(PACKAGE)/etc/beamium/config.yaml
+	mkdir -p $(BUILD_DIR)/etc/beamium
+	cp $(CURDIR)/config.debian.yaml $(BUILD_DIR)/etc/beamium/config.yaml
 	dh_install
 
 override_dh_prep:
