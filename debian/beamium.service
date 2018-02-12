@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 EnvironmentFile=-/etc/default/beamium
-ExecStart=/usr/bin/beamium --config=/etc/beamium/config.yaml
+ExecStart=/usr/sbin/beamium --config=/etc/beamium/config.yaml
 Restart=on-failure
 User=beamium
 Group=beamium

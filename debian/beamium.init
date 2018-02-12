@@ -17,7 +17,7 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="beamium"
 NAME=beamium
-DAEMON=/usr/bin/$NAME
+DAEMON=/usr/sbin/$NAME
 PID_FILE=/var/run/$NAME.pid
 USER="beamium"
 GROUP="beamium"
