@@ -16,6 +16,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use config;
+use lib;
 
 /// Thread sleeping time.
 const REST_TIME: u64 = 10;
@@ -101,36 +102,13 @@ fn route(
             };
 
             for line in file.lines() {
-                if labels.is_empty() {
-                    metrics.push(String::from(line));
-                    continue;
-                }
-                let mut parts = line.splitn(2, "{");
-
-                let class = match parts.next() {
-                    None => {
-                        warn!("no_class");
+                match lib::add_labels(&line, labels) {
+                    Ok(v) => metrics.push(v),
+                    Err(_) => {
+                        warn!("bad line {}", &line);
                         continue;
                     }
-                    Some(v) => v,
                 };
-                let class = String::from(class);
-                let plabels = match parts.next() {
-                    None => {
-                        warn!("no_labels");
-                        continue;
-                    }
-                    Some(v) => v,
-                };
-                let plabels = String::from(plabels);
-
-                let slabels = labels.clone() + if plabels.trim().starts_with("}") {
-                    ""
-                } else {
-                    ","
-                } + &plabels;
-
-                metrics.push(format!("{}{{{}", class, slabels))
             }
 
             files.push(entry.path());
