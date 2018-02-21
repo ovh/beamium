@@ -37,6 +37,7 @@ mod config;
 mod scraper;
 mod router;
 mod sink;
+mod lib;
 mod log;
 
 include!("version.rs");
