@@ -17,6 +17,8 @@ use hyper_timeout::TimeoutConnector;
 use futures::{Async, Future, Poll, Stream};
 use futures::future::{err, ok};
 use std::time::Duration;
+use std::ops::Deref;
+use std::ops::DerefMut;
 // use flate2::Compression;
 // use flate2::write::ZlibEncoder;
 
@@ -112,16 +114,17 @@ pub fn send_thread(
 
     // Client should be shared accross sinks
     let client = hyper::Client::configure()
+        .body::<Payload>()
         .keep_alive(true)
         .connector(tm)
         .build(&handle);
 
     loop {
         Payload::new(sigint.clone(), todo.clone(), batch_count, batch_size).map(|p| {
-            let (tx, body) = hyper::Body::pair();
+            let processed = p.processed();
 
-            let mut req: hyper::Request = hyper::Request::new(hyper::Post, url.clone());
-            req.set_body(body);
+            let mut req: hyper::Request<Payload> = hyper::Request::new(hyper::Post, url.clone());
+            req.set_body(p);
             req.headers_mut().set_raw(String::from(token_header), token);
 
             info!("Req");
@@ -145,44 +148,44 @@ pub fn send_thread(
                 })
                 .or_else(|err| ok(HttpResult::Error(SendError::Hyper(err))));
 
-            let pipe = p.forward(tx).and_then(|res| ok(res.0));
-            core.run(req.join(pipe).then(|res| match res {
+            core.run(req.then(|res: Result<HttpResult, Box<Error>>| match res {
                 Err(error) => {
                     crit!("unrecoverable error: {}", error);
                     err(())
                 }
                 Ok(res) => {
-                    let payload = res.1;
-                    let state = match res.0 {
+                    let state = match res {
                         HttpResult::Ok(result) => {
                             let status = result.0;
                             if status.is_success() {
-                                Ok(payload)
+                                Ok(())
                             } else {
-                                Err(payload)
+                                error!("HTTP error: {}", status);
+                                Err(())
                             }
                         }
                         HttpResult::Error(error) => {
-                            error!("{}", error);
-                            Err(payload)
+                            error!("HTTP error: {}", error);
+                            Err(())
                         }
                     };
 
                     match state {
-                        Err(mut payload) => {
+                        Err(_) => {
                             // recover processing file
-                            // TODO Must be done in payload
-                            payload.processing.take().map(|p| payload.processed.push(p));
-                            let mut todo = payload.todo.lock().unwrap();
-                            for entry in payload.processed {
+                            let mut processed = processed.lock().unwrap();
+                            let mut todo = todo.lock().unwrap();
+                            for entry in processed.deref_mut().drain(0..) {
                                 debug!("pushback sink file {}", format!("{:?}", entry.display()));
                                 todo.push_front(entry);
                             }
                         }
-                        Ok(payload) => {
-                            info!("post success - {}", payload.sent_lines);
+                        Ok(_) => {
+                            info!("post success");
+                            // info!("post success - {}", payload.sent_lines);
                             // debug!("{}", b);
-                            for entry in payload.processed {
+                            let processed = processed.lock().unwrap();
+                            for entry in processed.deref() {
                                 debug!("delete sink file {}", format!("{:?}", entry.display()));
                                 match fs::remove_file(entry) {
                                     Err(err) => error!("{}", err),
@@ -209,7 +212,7 @@ struct Payload {
     sigint: Arc<AtomicBool>,
     todo: Arc<Mutex<VecDeque<PathBuf>>>,
     processing: Option<PathBuf>,
-    processed: Vec<PathBuf>,
+    processed: Arc<Mutex<Vec<PathBuf>>>,
     reader: Option<BufReader<File>>,
     remaining: String,
     sent_lines: usize,
@@ -228,7 +231,7 @@ impl Payload {
             batch_size: batch_size as i64,
             todo: todo,
             processing: None,
-            processed: Vec::new(),
+            processed: Arc::new(Mutex::new(Vec::new())),
             reader: None,
             remaining: String::new(),
             sent_lines: 0,
@@ -243,9 +246,20 @@ impl Payload {
         }
     }
 
+    fn processed(&self) -> Arc<Mutex<Vec<PathBuf>>> {
+        self.processed.clone()
+    }
+
     fn get_file(&mut self) -> Option<PathBuf> {
         let mut todo = self.todo.lock().unwrap();
-        todo.pop_front()
+        let file = todo.pop_front();
+
+        match file {
+            Some(ref f) => self.processed.lock().unwrap().push(f.clone()),
+            None => {}
+        }
+
+        file
     }
 
     fn load_file(&self, path: &PathBuf) -> Option<BufReader<File>> {
@@ -261,10 +275,10 @@ impl Payload {
 }
 
 impl Stream for Payload {
-    type Item = Result<hyper::Chunk, hyper::error::Error>;
-    type Error = Box<Error>;
+    type Item = hyper::Chunk;
+    type Error = hyper::Error;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll(&mut self) -> Poll<Option<hyper::Chunk>, hyper::Error> {
         // Abort on sigint
         if self.sigint.load(Ordering::Relaxed) && self.processing.is_none() {
             return Ok(Async::Ready(None));
@@ -319,14 +333,13 @@ impl Stream for Payload {
 
         if drained {
             self.reader = None;
-            self.processing.take().map(|p| self.processed.push(p));
-            return Ok(Async::NotReady);
+            self.processing = None;
         }
 
         self.batch_size = self.batch_size - idx as i64;
 
         if s.len() > 0 {
-            Ok(Async::Ready(Some(Ok(hyper::Chunk::from(s)))))
+            Ok(Async::Ready(Some(hyper::Chunk::from(s))))
         } else {
             Ok(Async::Ready(None))
         }
