@@ -23,6 +23,7 @@ pub struct Sink<'a> {
     dir: &'a String,
     watch_period: u64,
     timeout: u64,
+    keep_alive: bool,
     token: &'a String,
     token_header: &'a String,
     url: &'a hyper::Uri,
@@ -43,6 +44,7 @@ impl<'a> Sink<'a> {
             dir: &parameters.sink_dir,
             watch_period: parameters.scan_period,
             timeout: parameters.timeout,
+            keep_alive: sink.keep_alive,
             token: &sink.token,
             token_header: &sink.token_header,
             url: &sink.url,
@@ -79,7 +81,8 @@ impl<'a> Sink<'a> {
                 for _ in 0..self.parallel {
                     let (name, sigint) = (self.name.clone(), self.sigint.clone());
                     let todo = self.todo.clone();
-                    let (url, timeout) = (self.url.clone(), self.timeout);
+                    let url = self.url.clone();
+                    let (timeout, keep_alive) = (self.timeout, self.keep_alive);
                     let (token, token_header) = (self.token.clone(), self.token_header.clone());
                     let (batch_count, batch_size) = (self.batch_count, self.batch_size);
 
@@ -93,6 +96,7 @@ impl<'a> Sink<'a> {
                                     url,
                                     todo,
                                     timeout,
+                                    keep_alive,
                                     batch_count,
                                     batch_size,
                                     sigint,

@@ -83,6 +83,7 @@ sinks: # Sinks definitions (Optional)
     ttl: 3600                          # Discard file older than ttl (seconds)    (Optional, default: 3600)
     size: 1073741824                   # Discard old file if sink size is greater (Optional, default: 1073741824)
     parallel: 1                        # Send parallelism                         (Optional, default: 1)
+    keep-alive: 1                      # Use keep alive                           (Optional, default: 1)
 ```
 
 #### Labels
