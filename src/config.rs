@@ -58,6 +58,7 @@ pub struct Sink {
     pub ttl: u64,
     pub size: u64,
     pub parallel: u64,
+    pub keep_alive: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -376,6 +377,16 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                     )))
                 };
 
+                let keep_alive = if v["keep-alive"].is_badvalue() {
+                    true
+                } else {
+                    try!(
+                        v["keep-alive"]
+                            .as_bool()
+                            .ok_or(format!("sinks.{}.keep-alive should be a boolean", name))
+                    )
+                };
+
                 config.sinks.push(Sink {
                     name: String::from(name),
                     url: url,
@@ -385,6 +396,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                     ttl: ttl,
                     size: size,
                     parallel: parallel,
+                    keep_alive: keep_alive,
                 })
             }
         }

@@ -98,6 +98,7 @@ pub fn send_thread(
     url: hyper::Uri,
     todo: Arc<Mutex<VecDeque<PathBuf>>>,
     timeout: u64,
+    keep_alive: bool,
     batch_count: u64,
     batch_size: u64,
     sigint: Arc<AtomicBool>,
@@ -115,7 +116,7 @@ pub fn send_thread(
     // Client should be shared accross sinks
     let client = hyper::Client::configure()
         .body::<Payload>()
-        .keep_alive(true)
+        .keep_alive(keep_alive)
         .connector(tm)
         .build(&handle);
 
