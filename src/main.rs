@@ -23,6 +23,7 @@ extern crate slog_syslog;
 extern crate slog_term;
 extern crate time;
 extern crate tokio_core;
+extern crate tokio_timer;
 extern crate yaml_rust;
 
 use clap::App;

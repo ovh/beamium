@@ -5,11 +5,14 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, SystemTime};
-
+use futures::sync::oneshot;
+use futures::future::Shared;
 use time;
+use futures::sync::mpsc::Receiver;
+use futures::task::Task;
+use futures::{Async, Stream};
 
 use config;
 
@@ -20,7 +23,8 @@ pub fn fs_thread(
     todo: Arc<Mutex<VecDeque<PathBuf>>>,
     max_size: u64,
     ttl: u64,
-    sigint: Arc<AtomicBool>,
+    sigint: Shared<oneshot::Receiver<()>>,
+    mut notify_rx: Receiver<Task>,
 ) {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
@@ -39,6 +43,10 @@ pub fn fs_thread(
                     for f in new {
                         files.insert(f.clone());
                         todo.push_front(f);
+                        match notify_rx.poll().expect("poll never failed") {
+                            Async::Ready(t) => t.map(|t| t.notify()),
+                            Async::NotReady => None,
+                        };
                     }
                 }
                 for f in deleted {
@@ -60,7 +68,7 @@ pub fn fs_thread(
         };
         for _ in 0..sleep_time / config::REST_TIME {
             thread::sleep(Duration::from_millis(config::REST_TIME));
-            if sigint.load(Ordering::Relaxed) {
+            if sigint.peek().is_some() {
                 return;
             }
         }
