@@ -7,12 +7,14 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
+
+use time;
+
 use futures::sync::oneshot;
 use futures::future::Shared;
-use time;
-use futures::sync::mpsc::Receiver;
-use futures::task::Task;
-use futures::{Async, Stream};
+use futures::sync::mpsc::Sender;
+use futures::{lazy, Async};
+use futures::future::{ok, FutureResult};
 
 use config;
 
@@ -24,41 +26,58 @@ pub fn fs_thread(
     max_size: u64,
     ttl: u64,
     sigint: Shared<oneshot::Receiver<()>>,
-    mut notify_rx: Receiver<Task>,
+    mut file_tx: Sender<PathBuf>,
 ) {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
+    let mut core = ::tokio_core::reactor::Core::new().expect("Fail to start tokio reactor");
+
     loop {
         let start = time::now_utc();
+        let work = lazy(|| -> FutureResult<(), ()> {
+            match list(name, dir, &files, ttl) {
+                Err(err) => error!("list fail: {}", err),
+                Ok((new, deleted, size)) => {
+                    if new.len() > 0 {
+                        debug!("found {} files", new.len());
+                    }
 
-        match list(name, dir, &files, ttl) {
-            Err(err) => error!("list fail: {}", err),
-            Ok((new, deleted, size)) => {
-                if new.len() > 0 {
-                    debug!("found {} files", new.len());
-                }
-
-                {
-                    let mut todo = todo.lock().unwrap();
+                    // let mut todo = todo.lock().unwrap();
                     for f in new {
+                        loop {
+                            let ready = file_tx.poll_ready().expect("receiver are never droped");
+                            match ready {
+                                Async::NotReady => {
+                                    // TODO log
+                                    thread::sleep(Duration::from_millis(config::REST_TIME));
+                                }
+                                Async::Ready(_) => {
+                                    break;
+                                }
+                            }
+                        }
                         files.insert(f.clone());
-                        todo.push_front(f);
-                        match notify_rx.poll().expect("poll never failed") {
-                            Async::Ready(t) => t.map(|t| t.notify()),
-                            Async::NotReady => None,
-                        };
+                        file_tx.try_send(f).expect("send never failed");
+                        // todo.push_front(f);
+                        // match notify_rx.poll().expect("poll never failed") {
+                        //     Async::Ready(t) => t.map(|t| t.notify()),
+                        //     Async::NotReady => None,
+                        // };
+                    }
+                    for f in deleted {
+                        files.remove(&f);
+                    }
+
+                    match cappe(size, max_size, &todo) {
+                        Err(err) => error!("cappe fail: {}", err),
+                        Ok(()) => {}
                     }
                 }
-                for f in deleted {
-                    files.remove(&f);
-                }
-
-                match cappe(size, max_size, &todo) {
-                    Err(err) => error!("cappe fail: {}", err),
-                    Ok(()) => {}
-                }
             }
-        }
+            ok(())
+        });
+
+        core.run(work).expect("always ok");
 
         let elapsed = (time::now_utc() - start).num_milliseconds() as u64;
         let sleep_time = if elapsed > period {

@@ -14,6 +14,8 @@ use hyper_timeout::TimeoutConnector;
 use std::time::Duration;
 use futures::sync::mpsc::{channel, Sender};
 use futures::task::Task;
+use futures::future::ok;
+use futures::{Async, Stream};
 
 use slog_scope;
 
@@ -67,7 +69,7 @@ impl<'a> Sink<'a> {
 
     pub fn start(&mut self) {
         debug!("start sink: {}", self.name);
-        let (notify_tx, notify_rx) = channel(self.parallel as usize); // TODO move to unsync one
+        let (file_tx, file_rx) = channel(self.parallel as usize);
 
         // spawn fs thread
         let (name, dir, period, todo, sigint) = (
@@ -82,7 +84,7 @@ impl<'a> Sink<'a> {
         self.handles.push(thread::spawn(move || {
             slog_scope::scope(
                 &slog_scope::logger().new(o!("sink" => name.clone())),
-                || fs::fs_thread(&name, &dir, period, todo, max_size, ttl, sigint, notify_rx),
+                || fs::fs_thread(&name, &dir, period, todo, max_size, ttl, sigint, file_tx),
             );
         }));
 
@@ -119,6 +121,9 @@ impl<'a> Sink<'a> {
                             .build(&handle),
                     );
 
+                    // TODO move to unsync one
+                    let (notify_tx, mut notify_rx) = channel(parallel as usize);
+
                     // spawn send threads
                     for _ in 0..parallel {
                         let client = client.clone();
@@ -139,6 +144,19 @@ impl<'a> Sink<'a> {
 
                         core.handle().spawn(work);
                     }
+
+                    let fs = file_rx.for_each(move |f| {
+                        let mut todo = todo.lock().unwrap();
+                        todo.push_front(f);
+
+                        match notify_rx.poll().expect("poll never failed") {
+                            Async::Ready(t) => t.map(|t| t.notify()),
+                            Async::NotReady => None,
+                        };
+                        ok(())
+                    });
+                    core.handle().spawn(fs);
+
                     core.run(sigint).expect("Sigint could not fail");
                 },
             )
