@@ -5,17 +5,19 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
+
 use hyper;
-use futures::sync::oneshot;
-use futures::Future;
-use futures::future::Shared;
 use hyper_tls::HttpsConnector;
 use hyper_timeout::TimeoutConnector;
-use std::time::Duration;
+
+use tokio_core::reactor::Core;
+
+use futures::future::Shared;
+use futures::Future;
+use futures::sync::oneshot;
 use futures::sync::mpsc::{channel, Sender};
 use futures::task::Task;
-use futures::future::ok;
-use futures::{Async, Stream};
 
 use slog_scope;
 
@@ -23,6 +25,8 @@ use config;
 
 mod fs;
 mod send;
+
+const REACTOR_CLIENT: usize = 30;
 
 pub struct Sink<'a> {
     name: &'a String,
@@ -69,98 +73,76 @@ impl<'a> Sink<'a> {
 
     pub fn start(&mut self) {
         debug!("start sink: {}", self.name);
-        let (file_tx, file_rx) = channel(self.parallel as usize);
+        let (notify_tx, notify_rx) = channel(self.parallel as usize);
 
         // spawn fs thread
-        let (name, dir, period, todo, sigint) = (
-            self.name.clone(),
-            self.dir.clone(),
-            self.watch_period,
-            self.todo.clone(),
-            self.sigint.1.clone(),
-        );
+        let (name, dir, todo) = (self.name.clone(), self.dir.clone(), self.todo.clone());
+        let (period, sigint) = (self.watch_period, self.sigint.1.clone());
         let (max_size, ttl) = (self.max_size, self.ttl);
 
         self.handles.push(thread::spawn(move || {
             slog_scope::scope(
                 &slog_scope::logger().new(o!("sink" => name.clone())),
-                || fs::fs_thread(&name, &dir, period, todo, max_size, ttl, sigint, file_tx),
+                || fs::fs_thread(&name, &dir, period, todo, max_size, ttl, sigint, notify_rx),
             );
         }));
 
-        let (name, sigint) = (self.name.clone(), self.sigint.1.clone());
-        let todo = self.todo.clone();
-        let url = self.url.clone();
-        let (timeout, keep_alive) = (self.timeout, self.keep_alive);
-        let (token, token_header) = (self.token.clone(), self.token_header.clone());
-        let (batch_count, batch_size) = (self.batch_count, self.batch_size);
-        let parallel = self.parallel.clone();
+        // spawn sender threads
+        let reactor_count = (self.parallel as f64 / REACTOR_CLIENT as f64).ceil() as u64;
+        let client_count = (self.parallel as f64 / reactor_count as f64).ceil() as u64;
+        for _ in 0..reactor_count {
+            let (name, sigint) = (self.name.clone(), self.sigint.1.clone());
+            let todo = self.todo.clone();
+            let url = self.url.clone();
+            let (timeout, keep_alive) = (self.timeout, self.keep_alive);
+            let (token, token_header) = (self.token.clone(), self.token_header.clone());
+            let (batch_count, batch_size) = (self.batch_count, self.batch_size);
+            let notify_tx: Sender<Task> = notify_tx.clone();
 
-        self.handles.push(thread::spawn(move || {
-            slog_scope::scope(
-                &slog_scope::logger().new(o!("sink" => name.clone())),
-                || {
-                    let mut core =
-                        ::tokio_core::reactor::Core::new().expect("Fail to start tokio reactor");
-                    let handle = core.handle();
-                    let connector =
-                        HttpsConnector::new(4, &handle).expect("Fail to start https connector");
+            self.handles.push(thread::spawn(move || {
+                slog_scope::scope(
+                    &slog_scope::logger().new(o!("sink" => name.clone())),
+                    || {
+                        let mut core = Core::new().expect("Fail to start tokio reactor");
+                        let handle = core.handle();
+                        let connector =
+                            HttpsConnector::new(4, &handle).expect("Fail to start https connector");
 
-                    // Handle connection timeouts
-                    let mut tm = TimeoutConnector::new(connector, &handle);
-                    tm.set_connect_timeout(Some(Duration::from_secs(timeout)));
-                    tm.set_read_timeout(Some(Duration::from_secs(timeout)));
-                    tm.set_write_timeout(Some(Duration::from_secs(timeout)));
+                        // Handle connection timeouts
+                        let mut tm = TimeoutConnector::new(connector, &handle);
+                        tm.set_connect_timeout(Some(Duration::from_secs(timeout)));
+                        tm.set_read_timeout(Some(Duration::from_secs(timeout)));
+                        tm.set_write_timeout(Some(Duration::from_secs(timeout)));
 
-                    // Client should be shared accross sinks
-                    let client = Arc::new(
-                        hyper::Client::configure()
-                            .body::<send::PayloadBody>()
-                            .keep_alive(keep_alive)
-                            .connector(tm)
-                            .build(&handle),
-                    );
-
-                    // TODO move to unsync one
-                    let (notify_tx, mut notify_rx) = channel(parallel as usize);
-
-                    // spawn send threads
-                    for _ in 0..parallel {
-                        let client = client.clone();
-                        let (token, token_header) = (token.clone(), token_header.clone());
-                        let (url, todo) = (url.clone(), todo.clone());
-                        let notify_tx: Sender<Task> = notify_tx.clone();
-
-                        let work = send::send_thread(
-                            client,
-                            token,
-                            token_header,
-                            url,
-                            todo,
-                            batch_count,
-                            batch_size,
-                            notify_tx,
+                        let client = Arc::new(
+                            hyper::Client::configure()
+                                .body::<send::PayloadBody>()
+                                .keep_alive(keep_alive)
+                                .connector(tm)
+                                .build(&handle),
                         );
 
-                        core.handle().spawn(work);
-                    }
+                        // spawn send threads
+                        for _ in 0..client_count {
+                            let work = send::send_thread(
+                                client.clone(),
+                                token.clone(),
+                                token_header.clone(),
+                                url.clone(),
+                                todo.clone(),
+                                batch_count,
+                                batch_size,
+                                notify_tx.clone(),
+                            );
 
-                    let fs = file_rx.for_each(move |f| {
-                        let mut todo = todo.lock().unwrap();
-                        todo.push_front(f);
+                            core.handle().spawn(work);
+                        }
 
-                        match notify_rx.poll().expect("poll never failed") {
-                            Async::Ready(t) => t.map(|t| t.notify()),
-                            Async::NotReady => None,
-                        };
-                        ok(())
-                    });
-                    core.handle().spawn(fs);
-
-                    core.run(sigint).expect("Sigint could not fail");
-                },
-            )
-        }));
+                        core.run(sigint).expect("Sigint could not fail");
+                    },
+                )
+            }));
+        }
     }
 
     pub fn stop(self) {

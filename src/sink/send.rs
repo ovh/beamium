@@ -17,6 +17,7 @@ use futures::{Async, Future, Poll, Stream};
 use futures::future::{ok, FutureResult};
 use futures::sync::mpsc::Sender;
 use futures::task::{current, Task};
+
 // use flate2::Compression;
 // use flate2::write::ZlibEncoder;
 
@@ -243,9 +244,9 @@ impl PayloadBody {
 
             self.remaining_count = self.remaining_count - 1;
 
-            match File::open(path) {
+            match File::open(path.clone()) {
                 Err(err) => {
-                    error!("{}", err);
+                    error!("{} - {:?}", err, path);
                     None
                 }
                 Ok(f) => Some(BufReader::new(f)),
