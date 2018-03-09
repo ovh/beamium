@@ -12,9 +12,12 @@ use time;
 
 use futures::sync::oneshot;
 use futures::future::Shared;
-use futures::sync::mpsc::Sender;
-use futures::{lazy, Async};
+use futures::sync::mpsc::Receiver;
+use futures::{lazy, Async, Stream};
 use futures::future::{ok, FutureResult};
+use futures::task::Task;
+
+use tokio_core::reactor::Core;
 
 use config;
 
@@ -26,11 +29,11 @@ pub fn fs_thread(
     max_size: u64,
     ttl: u64,
     sigint: Shared<oneshot::Receiver<()>>,
-    mut file_tx: Sender<PathBuf>,
+    mut notify_rx: Receiver<Task>,
 ) {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
-    let mut core = ::tokio_core::reactor::Core::new().expect("Fail to start tokio reactor");
+    let mut core = Core::new().expect("Fail to start tokio reactor");
 
     loop {
         let start = time::now_utc();
@@ -42,27 +45,16 @@ pub fn fs_thread(
                         debug!("found {} files", new.len());
                     }
 
-                    // let mut todo = todo.lock().unwrap();
-                    for f in new {
-                        loop {
-                            let ready = file_tx.poll_ready().expect("receiver are never droped");
-                            match ready {
-                                Async::NotReady => {
-                                    // TODO log
-                                    thread::sleep(Duration::from_millis(config::REST_TIME));
-                                }
-                                Async::Ready(_) => {
-                                    break;
-                                }
-                            }
+                    {
+                        let mut todo = todo.lock().unwrap();
+                        for f in new {
+                            files.insert(f.clone());
+                            todo.push_front(f);
+                            match notify_rx.poll().expect("poll never failed") {
+                                Async::Ready(t) => t.map(|t| t.notify()),
+                                Async::NotReady => None,
+                            };
                         }
-                        files.insert(f.clone());
-                        file_tx.try_send(f).expect("send never failed");
-                        // todo.push_front(f);
-                        // match notify_rx.poll().expect("poll never failed") {
-                        //     Async::Ready(t) => t.map(|t| t.notify()),
-                        //     Async::NotReady => None,
-                        // };
                     }
                     for f in deleted {
                         files.remove(&f);
