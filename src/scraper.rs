@@ -6,9 +6,13 @@ use std::time::Duration;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use time;
+use std::io;
 use std::cmp;
 use hyper;
-use hyper_native_tls::NativeTlsClient;
+use hyper_tls::HttpsConnector;
+use hyper_timeout::TimeoutConnector;
+use futures::future::Future;
+use futures::Stream;
 use std::io::prelude::*;
 use std::fs;
 use std::fs::File;
@@ -21,9 +25,11 @@ use config;
 const REST_TIME: u64 = 10;
 
 /// Scraper loop.
-pub fn scraper(scraper: &config::Scraper,
-               parameters: &config::Parameters,
-               sigint: Arc<AtomicBool>) {
+pub fn scraper(
+    scraper: &config::Scraper,
+    parameters: &config::Parameters,
+    sigint: Arc<AtomicBool>,
+) {
     loop {
         let start = time::now_utc();
 
@@ -52,28 +58,42 @@ fn fetch(scraper: &config::Scraper, parameters: &config::Parameters) -> Result<(
     debug!("fetch {}", &scraper.url);
 
     // Fetch metrics
-    let ssl = NativeTlsClient::new().unwrap();
-    let connector = hyper::net::HttpsConnector::new(ssl);
-    let mut client = hyper::Client::with_connector(connector);
-    let mut headers = hyper::header::Headers::new();
-  
-    client.set_write_timeout(Some(Duration::from_secs(parameters.timeout)));
-    client.set_read_timeout(Some(Duration::from_secs(parameters.timeout)));
+    let mut core = try!(::tokio_core::reactor::Core::new());
+    let handle = core.handle();
+    let connector = try!(HttpsConnector::new(4, &handle));
+
+    let mut tm = TimeoutConnector::new(connector, &handle);
+    tm.set_connect_timeout(Some(Duration::from_secs(parameters.timeout)));
+    tm.set_read_timeout(Some(Duration::from_secs(parameters.timeout)));
+    tm.set_write_timeout(Some(Duration::from_secs(parameters.timeout)));
+
+    let client = hyper::Client::configure().connector(tm).build(&handle);
+    let mut req = hyper::Request::new(hyper::Method::Get, scraper.url.clone());
 
     for (key, value) in scraper.headers.iter() {
-        headers.set_raw(key.clone(), vec![value.clone().into_bytes()]);
+        req.headers_mut()
+            .set_raw(key.clone(), vec![value.clone().into_bytes()]);
     }
 
-    let mut res = try!(client.get(&scraper.url).headers(headers).send());
-    if !res.status.is_success() {
-        return Err(From::from("non 200 received"));
-    }
+    let get = client
+        .request(req)
+        .and_then(|res| {
+            if res.status().is_success() {
+                Ok(res)
+            } else {
+                Err(hyper::error::Error::from(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("{}", res.status()),
+                )))
+            }
+        })
+        .and_then(|res| res.body().concat2());
+
+    let got = core.run(get)?;
 
     // Read body
-    let mut body = String::new();
-    try!(res.read_to_string(&mut body));
+    let body = String::from_utf8_lossy(&got);
     trace!("data {}", &body);
-
 
     // Get now as millis
     let start = time::now_utc();
@@ -89,15 +109,13 @@ fn fetch(scraper: &config::Scraper, parameters: &config::Parameters) -> Result<(
         for line in body.lines() {
             let line = match scraper.format {
                 config::ScraperFormat::Sensision => String::from(line.trim()),
-                config::ScraperFormat::Prometheus => {
-                    match format_prometheus(line.trim(), now) {
-                        Err(_) => {
-                            warn!("bad row {}", &line);
-                            continue;
-                        }
-                        Ok(v) => v,
+                config::ScraperFormat::Prometheus => match format_prometheus(line.trim(), now) {
+                    Err(_) => {
+                        warn!("bad row {}", &line);
+                        continue;
                     }
-                }
+                    Ok(v) => v,
+                },
             };
 
             if line.is_empty() {
