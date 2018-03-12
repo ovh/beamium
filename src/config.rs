@@ -38,6 +38,7 @@ pub struct Scraper {
     pub format: ScraperFormat,
     pub metrics: Option<regex::RegexSet>,
     pub headers: HashMap<String, String>,
+    pub labels: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -254,11 +255,15 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                         None
                     } else {
                         let mut metrics = Vec::new();
-                        let values =
-                            try!(v["metrics"].as_vec().ok_or("metrics should be an array"));
+                        let values = try!(
+                            v["metrics"]
+                                .as_vec()
+                                .ok_or(format!("scrapers.{}.metrics should be an array", name))
+                        );
                         for v in values {
                             let value = try!(regex::Regex::new(try!(
-                                v.as_str().ok_or(format!("metrics.{} is invalid", name))
+                                v.as_str()
+                                    .ok_or(format!("scrapers.{}.metrics is invalid", name))
                             )));
                             metrics.push(String::from(r"^(\S*)\s") + value.as_str());
                         }
@@ -270,19 +275,42 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                     let headers = if v["headers"].is_badvalue() {
                         HashMap::new()
                     } else {
-                        let heads = try!(v["headers"].as_hash().ok_or("headers should be a map"));
+                        let heads = try!(
+                            v["headers"]
+                                .as_hash()
+                                .ok_or(format!("scrapers.{}.headers should be a map", name))
+                        );
                         let mut ret = HashMap::new();
                         for (k, v) in heads {
-                            let name = try!(k.as_str().ok_or("headers keys should be a string"));
-                            let value = try!(
-                                v.as_str()
-                                    .ok_or(format!("headers.{} value should be a string", name))
-                            );
+                            let hname = try!(k.as_str().ok_or(format!(
+                                "scrapers.{}.headers keys should be a string",
+                                name
+                            )));
+                            let value = try!(v.as_str().ok_or(format!(
+                                "scrapers.{}.headers.{} value should be a string",
+                                hname, name
+                            )));
                             ret.insert(String::from(name), String::from(value));
                         }
 
                         ret
                     };
+
+                    let mut labels = HashMap::new();
+                    if !v["labels"].is_badvalue() {
+                        let slabels = try!(v["labels"].as_hash().ok_or("labels should be a map"));
+                        for (k, v) in slabels {
+                            let lname = try!(k.as_str().ok_or(format!(
+                                "scrapers.{}.labels keys should be a string",
+                                name
+                            )));
+                            let value = try!(v.as_str().ok_or(format!(
+                                "scrapers.{}.labels.{} value should be a string",
+                                name, lname
+                            )));
+                            labels.insert(String::from(lname), String::from(value));
+                        }
+                    }
 
                     config.scrapers.push(Scraper {
                         name: String::from(name),
@@ -291,6 +319,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                         format: format,
                         metrics: metrics,
                         headers: headers,
+                        labels: labels,
                     })
                 }
             }
