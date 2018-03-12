@@ -1,6 +1,6 @@
 //! # Scraper module.
 //!
-//! The Scraper module fetch metrics to Prometheus.
+//! The Scraper module fetch metrics from an HTTP endpoint.
 use std::thread;
 use std::time::Duration;
 use std::sync::Arc;
@@ -21,6 +21,8 @@ use std::path::Path;
 
 use config;
 
+use lib;
+
 /// Thread sleeping time.
 const REST_TIME: u64 = 10;
 
@@ -30,10 +32,14 @@ pub fn scraper(
     parameters: &config::Parameters,
     sigint: Arc<AtomicBool>,
 ) {
+    let labels: String = scraper.labels.iter().fold(String::new(), |acc, (k, v)| {
+        let sep = if acc.is_empty() { "" } else { "," };
+        acc + sep + k + "=" + v
+    });
     loop {
         let start = time::now_utc();
 
-        match fetch(scraper, parameters) {
+        match fetch(scraper, &labels, parameters) {
             Err(err) => error!("fetch fail: {}", err),
             Ok(_) => info!("fetch success"),
         }
@@ -53,8 +59,12 @@ pub fn scraper(
     }
 }
 
-/// Fetch retrieve metrics from Prometheus.
-fn fetch(scraper: &config::Scraper, parameters: &config::Parameters) -> Result<(), Box<Error>> {
+/// Fetch retrieve metrics.
+fn fetch(
+    scraper: &config::Scraper,
+    labels: &str,
+    parameters: &config::Parameters,
+) -> Result<(), Box<Error>> {
     debug!("fetch {}", &scraper.url);
 
     // Fetch metrics
@@ -105,22 +115,28 @@ fn fetch(scraper: &config::Scraper, parameters: &config::Parameters) -> Result<(
     {
         // Open tmp file
         let mut file = try!(File::create(&temp_file));
+        let ts = lib::transcompiler::Transcompiler::new(&scraper.format);
 
         for line in body.lines() {
-            let line = match scraper.format {
-                config::ScraperFormat::Sensision => String::from(line.trim()),
-                config::ScraperFormat::Prometheus => match format_prometheus(line.trim(), now) {
-                    Err(_) => {
-                        warn!("bad row {}", &line);
-                        continue;
-                    }
-                    Ok(v) => v,
-                },
+            let line = match ts.format(line) {
+                Ok(v) => v,
+                Err(_) => {
+                    warn!("fail to format line {}", &line);
+                    continue;
+                }
             };
 
             if line.is_empty() {
                 continue;
             }
+
+            let line = match lib::add_labels(&line, labels) {
+                Ok(v) => v,
+                Err(_) => {
+                    warn!("fail to add label on {}", &line);
+                    continue;
+                }
+            };
 
             if scraper.metrics.is_some() {
                 if !scraper.metrics.as_ref().unwrap().is_match(&line) {
@@ -141,59 +157,4 @@ fn fetch(scraper: &config::Scraper, parameters: &config::Parameters) -> Result<(
     try!(fs::rename(&temp_file, &dest_file));
 
     Ok(())
-}
-
-/// Format Warp10 metrics from Prometheus one.
-fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
-    // Skip comments
-    if line.starts_with("#") {
-        return Ok(String::new());
-    }
-
-    // Extract Prometheus metric
-    let index = if line.contains("{") {
-        try!(line.rfind('}').ok_or("bad class"))
-    } else {
-        try!(line.find(' ').ok_or("bad class"))
-    };
-    let (class, v) = line.split_at(index + 1);
-    let mut tokens = v.split_whitespace();
-
-    let value = try!(tokens.next().ok_or("no value"));
-    let timestamp = tokens
-        .next()
-        .map(|v| i64::from_str_radix(v, 10).map(|v| v * 1000).unwrap_or(now))
-        .unwrap_or(now);
-
-    // Format class
-    let mut parts = class.splitn(2, "{");
-    let class = String::from(try!(parts.next().ok_or("no_class")));
-    let class = class.trim();
-    let plabels = parts.next();
-    let slabels = if plabels.is_some() {
-        let mut labels = plabels.unwrap().split("\",")
-            .map(|v| v.replace("=", "%3D")) // escape
-            .map(|v| v.replace("%3D\"", "=")) // remove left double quote
-            .map(|v| v.replace("\"}", "")) // remove right double quote
-            .map(|v| v.replace(",", "%2C")) // escape
-            .map(|v| v.replace("}", "%7D")) // escape
-            .map(|v| v.replace(r"\\", r"\")) // unescape
-            .map(|v| v.replace("\\\"", "\"")) // unescape
-            .map(|v| v.replace(r"\n", "%0A")) // unescape
-            .fold(String::new(), |acc, x| {
-                // skip invalid values
-                if !x.contains("=") {
-                    return acc
-                }
-                acc + &x + ","
-            });
-        labels.pop();
-        labels
-    } else {
-        String::new()
-    };
-
-    let class = format!("{}{{{}}}", class, slabels);
-
-    Ok(format!("{}// {} {}", timestamp, class, value))
 }
