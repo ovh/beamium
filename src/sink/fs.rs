@@ -48,12 +48,23 @@ pub fn fs_thread(
                     {
                         let mut todo = todo.lock().unwrap();
                         for f in new {
-                            files.insert(f.clone());
-                            todo.push_front(f);
-                            match notify_rx.poll().expect("poll never failed") {
-                                Async::Ready(t) => t.map(|t| t.notify()),
-                                Async::NotReady => None,
-                            };
+                            match remove_empty(&f) {
+                                Err(err) => error!("cannot remove empty file: {}", err),
+                                Ok(removed) => {
+                                    if removed {
+                                        debug!("remove empty file: {:?}", f);
+                                        files.remove(&f);
+                                        continue;
+                                    }
+
+                                    files.insert(f.clone());
+                                    todo.push_front(f);
+                                    match notify_rx.poll().expect("poll never failed") {
+                                        Async::Ready(t) => t.map(|t| t.notify()),
+                                        Async::NotReady => None,
+                                    };
+                                }
+                            }
                         }
                     }
                     for f in deleted {
@@ -167,4 +178,15 @@ fn cappe(actual: u64, target: u64, todo: &Arc<Mutex<VecDeque<PathBuf>>>) -> Resu
     }
 
     Ok(())
+}
+
+fn remove_empty(path: &PathBuf) -> Result<bool, Box<Error>> {
+    let metadata = fs::metadata(path.clone())?;
+    if metadata.len() <= 0 {
+        fs::remove_file(path.clone())?;
+
+        return Ok(true);
+    }
+
+    Ok(false)
 }
