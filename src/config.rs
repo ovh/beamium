@@ -290,7 +290,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                                 "scrapers.{}.headers.{} value should be a string",
                                 hname, name
                             )));
-                            ret.insert(String::from(name), String::from(value));
+                            ret.insert(String::from(hname), String::from(value));
                         }
 
                         ret
