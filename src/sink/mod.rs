@@ -111,8 +111,6 @@ impl<'a> Sink<'a> {
                         // Handle connection timeouts
                         let mut tm = TimeoutConnector::new(connector, &handle);
                         tm.set_connect_timeout(Some(Duration::from_secs(timeout)));
-                        tm.set_read_timeout(Some(Duration::from_secs(timeout)));
-                        tm.set_write_timeout(Some(Duration::from_secs(timeout)));
 
                         let client = Arc::new(
                             hyper::Client::configure()
