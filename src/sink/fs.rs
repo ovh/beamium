@@ -10,12 +10,12 @@ use std::time::{Duration, SystemTime};
 
 use time;
 
-use futures::sync::oneshot;
 use futures::future::Shared;
-use futures::sync::mpsc::Receiver;
-use futures::{lazy, Async, Stream};
 use futures::future::{ok, FutureResult};
+use futures::sync::mpsc::Receiver;
+use futures::sync::oneshot;
 use futures::task::Task;
+use futures::{lazy, Async, Stream};
 
 use tokio_core::reactor::Core;
 

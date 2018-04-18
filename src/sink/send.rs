@@ -1,22 +1,22 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::prelude::*;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::io::BufReader;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use hyper;
-use hyper_tls::HttpsConnector;
 use hyper_timeout::TimeoutConnector;
+use hyper_tls::HttpsConnector;
 
-use futures::{Async, Future, Poll, Stream};
 use futures::future::{ok, FutureResult};
 use futures::sync::mpsc::Sender;
 use futures::task::{current, Task};
+use futures::{Async, Future, Poll, Stream};
 
 // use flate2::Compression;
 // use flate2::write::ZlibEncoder;
