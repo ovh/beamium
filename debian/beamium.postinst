@@ -1,0 +1,64 @@
+#!/bin/sh
+
+set -e
+
+SERVICE=beamium
+
+[ -f /etc/default/$SERVICE ] && . /etc/default/$SERVICE
+
+registerService() {
+    if systemctl status >/dev/null 2>&1; then
+        deb-systemd-helper enable $SERVICE.service
+    elif [ -x "/etc/init.d/$SERVICE" ]; then
+        update-rc.d $SERVICE defaults || true
+    fi
+}
+
+startService() {
+    if systemctl status >/dev/null 2>&1; then
+        deb-systemd-invoke start $SERVICE.service
+    elif [ -x "/etc/init.d/$SERVICE" ]; then
+        if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+            invoke-rc.d $SERVICE start || true
+        else
+            /etc/init.d/$SERVICE start || true
+        fi
+    fi
+}
+
+statusService() {
+    if systemctl status >/dev/null 2>&1; then
+        deb-systemd-invoke status $SERVICE.service >/dev/null && echo "$SERVICE is running." || true
+    elif [ -x "/etc/init.d/$SERVICE" ]; then
+        if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+            invoke-rc.d $SERVICE status
+        else
+            /etc/init.d/$SERVICE status
+        fi
+    fi
+}
+
+
+case "$1" in
+    configure)
+        chown -R beamium:beamium /var/log/beamium
+        chown -R beamium:beamium /opt/beamium
+        registerService
+        STATUS=$(statusService) || true
+        if [ "$STATUS" = "$SERVICE is running." ] ; then
+            echo  "$SERVICE is running: not restarting it."
+        else
+            startService
+        fi
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

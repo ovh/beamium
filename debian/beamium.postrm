@@ -1,0 +1,31 @@
+#!/bin/sh
+
+set -e
+
+SERVICE=beamium
+
+case "$1" in
+
+    remove)
+        if [ -x "/usr/bin/deb-systemd-helper" ] ; then
+            deb-systemd-helper mask $SERVICE || true
+        else
+            update-rc.d $SERVICE remove || true
+        fi
+        ;;
+
+    purge)
+        rm -rf /var/log/$SERVICE
+        rm -rf /opt/$SERVICE
+        deluser beamium
+        ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # nothing to do
+        ;;
+
+    *)
+        echo "$0 called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
