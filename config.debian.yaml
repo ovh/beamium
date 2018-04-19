@@ -1,0 +1,17 @@
+sources:
+  source1:
+    url: http://127.0.0.1:9100/metrics
+    period: 10000
+
+sinks:
+  sink1:
+    url: WARP10_ENDPOINT
+    token: WARP10_TOKEN
+
+labels:
+  host: tmp
+
+parameters:
+  log-file: /var/log/beamium/beamium.log
+  source-dir: /opt/beamium/sources
+  sink-dir: /opt/beamium/sinks

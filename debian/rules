@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+BUILD_DIR=$(CURDIR)/debian/tmp
+export CARGO_TARGET_DIR=$(BUILD_DIR)
+
+DEBIAN_VERSION = $(shell lsb_release -rs | cut -d . -f 1)
+DH_ARGS = "--with systemd"
+# do we use systemd?
+ifeq "${DEBIAN_VERSION}"  "7"
+        DH_ARGS = ""
+endif
+ifeq "${DEBIAN_VERSION}"  "6"
+        DH_ARGS = ""
+endif
+
+%:
+	dh $@ ${DH_ARGS}
+
+override_dh_auto_build:
+	cargo build
+
+override_dh_install:
+	mkdir -p $(BUILD_DIR)/etc/beamium
+	cp $(CURDIR)/config.debian.yaml $(BUILD_DIR)/etc/beamium/config.yaml
+	dh_install
+
+override_dh_prep:
+	dh_prep -Xdebian/tmp
