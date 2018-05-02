@@ -8,16 +8,16 @@ use std::thread;
 use std::time::Duration;
 
 use hyper;
-use hyper_tls::HttpsConnector;
 use hyper_timeout::TimeoutConnector;
+use hyper_tls::HttpsConnector;
 
 use tokio_core::reactor::Core;
 
 use futures::future::Shared;
-use futures::Future;
-use futures::sync::oneshot;
 use futures::sync::mpsc::{channel, Sender};
+use futures::sync::oneshot;
 use futures::task::Task;
+use futures::Future;
 
 use slog_scope;
 
