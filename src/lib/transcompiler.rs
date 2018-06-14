@@ -50,6 +50,12 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     let mut tokens = v.split_whitespace();
 
     let value = tokens.next().ok_or("no value")?;
+
+    // Prometheus value can be '-Inf' or '+Inf', skipping if so
+    if value == "+Inf" || value == "-Inf" {
+        return Ok(String::new());
+    }
+
     let timestamp = tokens
         .next()
         .map(|v| i64::from_str_radix(v, 10).map(|v| v * 1000).unwrap_or(now))
@@ -86,4 +92,25 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     let class = format!("{}{{{}}}", class, slabels);
 
     Ok(format!("{}// {} {}", timestamp, class, value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prometheus_skip_infinity() {
+        let line = "f{job_id=\"123\"} +Inf";
+        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"123\"} -Inf";
+        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+    }
+
 }
