@@ -111,6 +111,8 @@ fn fetch(
 
     let dir = Path::new(&parameters.source_dir);
     let temp_file = dir.join(format!("{}.tmp", scraper.name));
+    let mut batch_size = 0;
+    let mut batch_count = 0;
     debug!("write to tmp file {}", format!("{:?}", temp_file));
     {
         // Open tmp file
@@ -144,15 +146,29 @@ fn fetch(
                 }
             }
 
-            try!(file.write(line.as_bytes()));
-            try!(file.write(b"\n"));
+            batch_size += line.len();
+            if batch_size > parameters.batch_size as usize && !line.starts_with("=") {
+                // Rotate scraped file
+                file.flush()?;
+
+                let dest_file = dir.join(format!("{}-{}-{}.metrics", scraper.name, now, batch_count));
+                debug!("rotate tmp file to {}", format!("{:?}", dest_file));
+                fs::rename(&temp_file, &dest_file)?;
+
+                file = File::create(&temp_file)?;
+                batch_size = 0;
+                batch_count += 1;
+            }
+
+            file.write(line.as_bytes())?;
+            file.write(b"\n")?;
         }
 
-        try!(file.flush());
+        file.flush()?;
     }
 
     // Rotate scraped file
-    let dest_file = dir.join(format!("{}-{}.metrics", scraper.name, now));
+    let dest_file = dir.join(format!("{}-{}-{}.metrics", scraper.name, now, batch_count));
     debug!("rotate tmp file to {}", format!("{:?}", dest_file));
     try!(fs::rename(&temp_file, &dest_file));
 
