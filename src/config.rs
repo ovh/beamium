@@ -74,6 +74,7 @@ pub struct Parameters {
     pub log_level: slog::Level,
     pub syslog: bool,
     pub timeout: u64,
+    pub router_parallel: u64,
 }
 
 #[derive(Debug)]
@@ -176,6 +177,7 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
             log_level: slog::Level::Info,
             syslog: false,
             timeout: 300,
+            router_parallel: 1,
         },
     };
 
@@ -543,6 +545,16 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 let timeout =
                     try!(cast::u64(timeout).map_err(|_| format!("parameters.timeout is invalid")));
                 config.parameters.timeout = timeout;
+            }
+            if !doc["parameters"]["router-parallel"].is_badvalue() {
+                let router_parallel = try!(
+                    doc["parameters"]["router-parallel"]
+                        .as_i64()
+                        .ok_or("parameters.router-parallel should be a number")
+                );
+                let router_parallel =
+                    try!(cast::u64(router_parallel).map_err(|_| format!("parameters.router-parallel is invalid")));
+                config.parameters.router_parallel = router_parallel;
             }
         }
     }

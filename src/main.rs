@@ -138,19 +138,8 @@ fn main() {
 
     // Spawn router
     info!("spawning router");
-    {
-        let (sinks, labels, parameters, sigint) = (
-            config.sinks.clone(),
-            config.labels.clone(),
-            config.parameters.clone(),
-            sigint.clone(),
-        );
-        handles.push(thread::spawn(move || {
-            slog_scope::scope(&slog_scope::logger().new(o!()), || {
-                router::router(&sinks, &labels, &parameters, sigint)
-            });
-        }));
-    }
+    let mut router = router::Router::new(&config.sinks, &config.parameters, &config.labels); // FIXME
+    router.start();
 
     // Spawn sinks
     info!("spawning sinks");
@@ -177,6 +166,8 @@ fn main() {
     for handle in handles {
         handle.join().unwrap();
     }
+
+    router.stop();
 
     for s in sinks {
         s.stop();
