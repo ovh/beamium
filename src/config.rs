@@ -3,20 +3,20 @@
 //! The Config module provides the beamium configuration.
 //! It set defaults and then load config from '/etc', local dir and provided path.
 
-use std::fs::File;
-use std::io::Read;
-use std::io;
-use std::fmt;
-use std::string::String;
-use std::path::Path;
-use std::error;
-use std::error::Error;
-use yaml_rust::{ScanError, YamlLoader};
 use cast;
-use std::collections::HashMap;
+use hyper;
 use regex;
 use slog;
-use hyper;
+use std::collections::HashMap;
+use std::error;
+use std::error::Error;
+use std::fmt;
+use std::fs::File;
+use std::io;
+use std::io::Read;
+use std::path::Path;
+use std::string::String;
+use yaml_rust::{ScanError, YamlLoader};
 
 pub const REST_TIME: u64 = 10;
 
@@ -171,7 +171,7 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
             scan_period: 1000,
             sink_dir: String::from("sinks"),
             source_dir: String::from("sources"),
-            batch_size: 200000,
+            batch_size: 200_000,
             batch_count: 250,
             log_file: String::from(env!("CARGO_PKG_NAME")) + ".log",
             log_level: slog::Level::Info,
@@ -184,28 +184,29 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
     if config_path.is_empty() {
         // Load from etc
         if Path::new("/etc/beamium/config.yaml").exists() {
-            try!(load_path("/etc/beamium/config.yaml", &mut config));
+            load_path("/etc/beamium/config.yaml", &mut config)?;
         } else if Path::new("config.yaml").exists() {
             // Load local
-            try!(load_path("config.yaml", &mut config));
+            load_path("config.yaml", &mut config)?;
         }
     } else {
         // Load from provided path
-        try!(load_path(config_path, &mut config));
+        load_path(config_path, &mut config)?;
     }
 
     Ok(config)
 }
 
 /// Extend config from file.
+#[allow(unknown_lints, cyclomatic_complexity)]
 fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), ConfigError> {
-    let mut file = try!(File::open(file_path));
+    let mut file = File::open(file_path)?;
     let mut contents = String::new();
-    try!(file.read_to_string(&mut contents));
-    let docs = try!(YamlLoader::load_from_str(&contents));
+    file.read_to_string(&mut contents)?;
+    let docs = YamlLoader::load_from_str(&contents)?;
     let config_scraper_keys = ["sources", "scrapers"];
     for doc in &docs {
-        for config_scraper_key in config_scraper_keys.iter() {
+        for config_scraper_key in &config_scraper_keys {
             let key = *config_scraper_key;
             if !doc[key].is_badvalue() {
                 if "sources" == key {
@@ -215,31 +216,29 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                     )
                 }
 
-                let scrapers = try!(doc[key].as_hash().ok_or(format!("{} should be a map", key)));
+                let scrapers = doc[key]
+                    .as_hash()
+                    .ok_or_else(|| format!("{} should be a map", key))?;
 
                 for (k, v) in scrapers {
-                    let name = try!(k.as_str().ok_or(format!("{} keys should be a string", key)));
-                    let url = try!(v["url"].as_str().ok_or(format!(
-                        "{}.{}.url is required and should be a string",
-                        key, name
-                    )));
-                    let url = try!(url.parse::<hyper::Uri>());
-                    let period = try!(v["period"].as_i64().ok_or(format!(
-                        "{}.{}.period is required and should be a number",
-                        key, name
-                    )));
-                    let period = try!(
-                        cast::u64(period)
-                            .map_err(|_| format!("scrapers.{}.period is invalid", name))
-                    );
+                    let name = k
+                        .as_str()
+                        .ok_or_else(|| format!("{} keys should be a string", key))?;
+                    let url = v["url"].as_str().ok_or_else(|| {
+                        format!("{}.{}.url is required and should be a string", key, name)
+                    })?;
+                    let url = url.parse::<hyper::Uri>()?;
+                    let period = v["period"].as_i64().ok_or_else(|| {
+                        format!("{}.{}.period is required and should be a number", key, name)
+                    })?;
+                    let period = cast::u64(period)
+                        .map_err(|_| format!("scrapers.{}.period is invalid", name))?;
                     let format = if v["format"].is_badvalue() {
                         ScraperFormat::Prometheus
                     } else {
-                        let f = try!(
-                            v["format"]
-                                .as_str()
-                                .ok_or(format!("scrapers.{}.format should be a string", name))
-                        );
+                        let f = v["format"]
+                            .as_str()
+                            .ok_or_else(|| format!("scrapers.{}.format should be a string", name))?;
 
                         if f == "prometheus" {
                             ScraperFormat::Prometheus
@@ -257,41 +256,38 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                         None
                     } else {
                         let mut metrics = Vec::new();
-                        let values = try!(
-                            v["metrics"]
-                                .as_vec()
-                                .ok_or(format!("scrapers.{}.metrics should be an array", name))
-                        );
+                        let values = v["metrics"].as_vec().ok_or_else(|| {
+                            format!("scrapers.{}.metrics should be an array", name)
+                        })?;
                         for v in values {
-                            let value = try!(regex::Regex::new(try!(
-                                v.as_str()
-                                    .ok_or(format!("scrapers.{}.metrics is invalid", name))
-                            )));
+                            let value =
+                                regex::Regex::new(v.as_str().ok_or_else(|| {
+                                    format!("scrapers.{}.metrics is invalid", name)
+                                })?)?;
                             metrics.push(String::from(r"^(\S*)\s") + value.as_str());
                         }
 
-                        Some(try!(regex::RegexSet::new(&metrics)))
+                        Some(regex::RegexSet::new(&metrics)?)
                     };
 
                     // let headers = HashMap::new();
                     let headers = if v["headers"].is_badvalue() {
                         HashMap::new()
                     } else {
-                        let heads = try!(
-                            v["headers"]
-                                .as_hash()
-                                .ok_or(format!("scrapers.{}.headers should be a map", name))
-                        );
+                        let heads = v["headers"]
+                            .as_hash()
+                            .ok_or_else(|| format!("scrapers.{}.headers should be a map", name))?;
                         let mut ret = HashMap::new();
                         for (k, v) in heads {
-                            let hname = try!(k.as_str().ok_or(format!(
-                                "scrapers.{}.headers keys should be a string",
-                                name
-                            )));
-                            let value = try!(v.as_str().ok_or(format!(
-                                "scrapers.{}.headers.{} value should be a string",
-                                hname, name
-                            )));
+                            let hname = k.as_str().ok_or_else(|| {
+                                format!("scrapers.{}.headers keys should be a string", name)
+                            })?;
+                            let value = v.as_str().ok_or_else(|| {
+                                format!(
+                                    "scrapers.{}.headers.{} value should be a string",
+                                    hname, name
+                                )
+                            })?;
                             ret.insert(String::from(hname), String::from(value));
                         }
 
@@ -300,146 +296,134 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
 
                     let mut labels = HashMap::new();
                     if !v["labels"].is_badvalue() {
-                        let slabels = try!(v["labels"].as_hash().ok_or("labels should be a map"));
+                        let slabels = v["labels"]
+                            .as_hash()
+                            .ok_or_else(|| "labels should be a map")?;
                         for (k, v) in slabels {
-                            let lname = try!(k.as_str().ok_or(format!(
-                                "scrapers.{}.labels keys should be a string",
-                                name
-                            )));
-                            let value = try!(v.as_str().ok_or(format!(
-                                "scrapers.{}.labels.{} value should be a string",
-                                name, lname
-                            )));
+                            let lname = k.as_str().ok_or_else(|| {
+                                format!("scrapers.{}.labels keys should be a string", name)
+                            })?;
+                            let value = v.as_str().ok_or_else(|| {
+                                format!(
+                                    "scrapers.{}.labels.{} value should be a string",
+                                    name, lname
+                                )
+                            })?;
                             labels.insert(String::from(lname), String::from(value));
                         }
                     }
 
                     config.scrapers.push(Scraper {
                         name: String::from(name),
-                        url: url,
-                        period: period,
-                        format: format,
-                        metrics: metrics,
-                        headers: headers,
-                        labels: labels,
+                        url,
+                        period,
+                        format,
+                        metrics,
+                        headers,
+                        labels,
                     })
                 }
             }
         }
 
         if !doc["sinks"].is_badvalue() {
-            let sinks = try!(doc["sinks"].as_hash().ok_or("sinks should be a map"));
+            let sinks = doc["sinks"]
+                .as_hash()
+                .ok_or_else(|| "sinks should be a map")?;
             for (k, v) in sinks {
-                let name = try!(k.as_str().ok_or("sinks keys should be a string"));
-                let url = try!(v["url"].as_str().ok_or(format!(
-                    "sinks.{}.url is required and should be a string",
-                    name
-                )));
-                let url = try!(url.parse::<hyper::Uri>());
-                let token = try!(v["token"].as_str().ok_or(format!(
-                    "sinks.{}.token is required and should be a string",
-                    name
-                )));
+                let name = k.as_str().ok_or_else(|| "sinks keys should be a string")?;
+                let url = v["url"].as_str().ok_or_else(|| {
+                    format!("sinks.{}.url is required and should be a string", name)
+                })?;
+                let url = url.parse::<hyper::Uri>()?;
+                let token = v["token"].as_str().ok_or_else(|| {
+                    format!("sinks.{}.token is required and should be a string", name)
+                })?;
                 let token_header = if v["token-header"].is_badvalue() {
                     "X-Warp10-Token"
                 } else {
-                    try!(
-                        v["token-header"]
-                            .as_str()
-                            .ok_or(format!("sinks.{}.token-header should be a string", name))
-                    )
+                    v["token-header"]
+                        .as_str()
+                        .ok_or_else(|| format!("sinks.{}.token-header should be a string", name))?
                 };
 
                 let selector = if v["selector"].is_badvalue() {
                     None
                 } else {
-                    Some(try!(regex::Regex::new(
+                    Some(regex::Regex::new(
                         format!(
                             "^{}",
-                            try!(v["selector"].as_str().ok_or(format!(
+                            v["selector"].as_str().ok_or_else(|| format!(
                                 "sinks.{}.selector \
                                  is invalid",
                                 name
-                            )))
-                        ).as_str()
-                    )))
+                            ))?
+                        ).as_str(),
+                    )?)
                 };
 
                 let ttl = if v["ttl"].is_badvalue() {
                     3600
                 } else {
-                    let ttl = try!(
-                        v["ttl"]
-                            .as_i64()
-                            .ok_or(format!("sinks.{}.ttl should be a number", name))
-                    );
-                    try!(
-                        cast::u64(ttl)
-                            .map_err(|_| format!("sinks.{}.ttl should be a positive number", name))
-                    )
+                    let ttl = v["ttl"]
+                        .as_i64()
+                        .ok_or_else(|| format!("sinks.{}.ttl should be a number", name))?;
+                    cast::u64(ttl)
+                        .map_err(|_| format!("sinks.{}.ttl should be a positive number", name))?
                 };
 
-                let size =
-                    if v["size"].is_badvalue() {
-                        1073741824
-                    } else {
-                        let size = try!(
-                            v["size"]
-                                .as_i64()
-                                .ok_or(format!("sinks.{}.size should be a number", name))
-                        );
-                        try!(cast::u64(size).map_err(|_| format!(
-                            "sinks.{}.size should be a positive number",
-                            name
-                        )))
-                    };
+                let size = if v["size"].is_badvalue() {
+                    1_073_741_824
+                } else {
+                    let size = v["size"]
+                        .as_i64()
+                        .ok_or_else(|| format!("sinks.{}.size should be a number", name))?;
+                    cast::u64(size)
+                        .map_err(|_| format!("sinks.{}.size should be a positive number", name))?
+                };
 
                 let parallel = if v["parallel"].is_badvalue() {
                     1
                 } else {
-                    let parallel = try!(
-                        v["parallel"]
-                            .as_i64()
-                            .ok_or(format!("sinks.{}.parallel should be a number", name))
-                    );
-                    try!(cast::u64(parallel).map_err(|_| format!(
-                        "sinks.{}.parallel should be a positive number",
-                        name
-                    )))
+                    let parallel = v["parallel"]
+                        .as_i64()
+                        .ok_or_else(|| format!("sinks.{}.parallel should be a number", name))?;
+                    cast::u64(parallel).map_err(|_| {
+                        format!("sinks.{}.parallel should be a positive number", name)
+                    })?
                 };
 
                 let keep_alive = if v["keep-alive"].is_badvalue() {
                     true
                 } else {
-                    try!(
-                        v["keep-alive"]
-                            .as_bool()
-                            .ok_or(format!("sinks.{}.keep-alive should be a boolean", name))
-                    )
+                    v["keep-alive"]
+                        .as_bool()
+                        .ok_or_else(|| format!("sinks.{}.keep-alive should be a boolean", name))?
                 };
 
                 config.sinks.push(Sink {
                     name: String::from(name),
-                    url: url,
+                    url,
                     token: String::from(token),
                     token_header: String::from(token_header),
-                    selector: selector,
-                    ttl: ttl,
-                    size: size,
-                    parallel: parallel,
-                    keep_alive: keep_alive,
+                    selector,
+                    ttl,
+                    size,
+                    parallel,
+                    keep_alive,
                 })
             }
         }
 
         if !doc["labels"].is_badvalue() {
-            let labels = try!(doc["labels"].as_hash().ok_or("labels should be a map"));
+            let labels = doc["labels"]
+                .as_hash()
+                .ok_or_else(|| "labels should be a map")?;
             for (k, v) in labels {
-                let name = try!(k.as_str().ok_or("labels keys should be a string"));
-                let value = try!(
-                    v.as_str()
-                        .ok_or(format!("labels.{} value should be a string", name))
-                );
+                let name = k.as_str().ok_or_else(|| "labels keys should be a string")?;
+                let value = v
+                    .as_str()
+                    .ok_or_else(|| format!("labels.{} value should be a string", name))?;
                 config
                     .labels
                     .insert(String::from(name), String::from(value));
@@ -448,112 +432,84 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
 
         if !doc["parameters"].is_badvalue() {
             if !doc["parameters"]["source-dir"].is_badvalue() {
-                let source_dir = try!(
-                    doc["parameters"]["source-dir"]
-                        .as_str()
-                        .ok_or(format!("parameters.source-dir should be a string"))
-                );
+                let source_dir = doc["parameters"]["source-dir"]
+                    .as_str()
+                    .ok_or_else(|| "parameters.source-dir should be a string".to_string())?;
                 config.parameters.source_dir = String::from(source_dir);
             }
 
             if !doc["parameters"]["sink-dir"].is_badvalue() {
-                let sink_dir = try!(
-                    doc["parameters"]["sink-dir"]
-                        .as_str()
-                        .ok_or(format!("parameters.sink-dir should be a string"))
-                );
+                let sink_dir = doc["parameters"]["sink-dir"]
+                    .as_str()
+                    .ok_or_else(|| "parameters.sink-dir should be a string".to_string())?;
                 config.parameters.sink_dir = String::from(sink_dir);
             }
 
             if !doc["parameters"]["scan-period"].is_badvalue() {
-                let scan_period = try!(
-                    doc["parameters"]["scan-period"]
-                        .as_i64()
-                        .ok_or(format!("parameters.scan-period should be a number"))
-                );
-                let scan_period = try!(
-                    cast::u64(scan_period)
-                        .map_err(|_| format!("parameters.scan-period is invalid"))
-                );
+                let scan_period = doc["parameters"]["scan-period"]
+                    .as_i64()
+                    .ok_or_else(|| "parameters.scan-period should be a number".to_string())?;
+                let scan_period = cast::u64(scan_period)
+                    .map_err(|_| "parameters.scan-period is invalid".to_string())?;
                 config.parameters.scan_period = scan_period;
             }
 
             if !doc["parameters"]["batch-size"].is_badvalue() {
-                let batch_size = try!(
-                    doc["parameters"]["batch-size"]
-                        .as_i64()
-                        .ok_or(format!("parameters.batch-size should be a number"))
-                );
-                let batch_size = try!(
-                    cast::u64(batch_size).map_err(|_| format!("parameters.batch-size is invalid"))
-                );
+                let batch_size = doc["parameters"]["batch-size"]
+                    .as_i64()
+                    .ok_or_else(|| "parameters.batch-size should be a number".to_string())?;
+                let batch_size = cast::u64(batch_size)
+                    .map_err(|_| "parameters.batch-size is invalid".to_string())?;
                 config.parameters.batch_size = batch_size;
             }
 
             if !doc["parameters"]["batch-count"].is_badvalue() {
-                let batch_count = try!(
-                    doc["parameters"]["batch-count"]
-                        .as_i64()
-                        .ok_or(format!("parameters.batch-count should be a number"))
-                );
-                let batch_count = try!(
-                    cast::u64(batch_count)
-                        .map_err(|_| format!("parameters.batch-count is invalid"))
-                );
+                let batch_count = doc["parameters"]["batch-count"]
+                    .as_i64()
+                    .ok_or_else(|| "parameters.batch-count should be a number".to_string())?;
+                let batch_count = cast::u64(batch_count)
+                    .map_err(|_| "parameters.batch-count is invalid".to_string())?;
                 config.parameters.batch_count = batch_count;
             }
 
             if !doc["parameters"]["log-file"].is_badvalue() {
-                let log_file = try!(
-                    doc["parameters"]["log-file"]
-                        .as_str()
-                        .ok_or(format!("parameters.log-file should be a string"))
-                );
+                let log_file = doc["parameters"]["log-file"]
+                    .as_str()
+                    .ok_or_else(|| "parameters.log-file should be a string".to_string())?;
                 config.parameters.log_file = String::from(log_file);
             }
 
             if !doc["parameters"]["log-level"].is_badvalue() {
-                let log_level = try!(
-                    doc["parameters"]["log-level"]
-                        .as_i64()
-                        .ok_or(format!("parameters.log-level should be a number"))
-                );
-                let log_level = try!(
-                    cast::u64(log_level).map_err(|_| format!("parameters.log-level is invalid"))
-                );
-                let log_level = try!(
-                    slog::Level::from_usize(log_level as usize)
-                        .ok_or(format!("parameters.log-level is invalid"))
-                );
+                let log_level = doc["parameters"]["log-level"]
+                    .as_i64()
+                    .ok_or_else(|| "parameters.log-level should be a number".to_string())?;
+                let log_level = cast::u64(log_level)
+                    .map_err(|_| "parameters.log-level is invalid".to_string())?;
+                let log_level = slog::Level::from_usize(log_level as usize)
+                    .ok_or_else(|| "parameters.log-level is invalid".to_string())?;
                 config.parameters.log_level = log_level;
             }
 
             if !doc["parameters"]["syslog"].is_badvalue() {
-                let syslog = try!(
-                    doc["parameters"]["syslog"]
-                        .as_bool()
-                        .ok_or("parameters.bool should be a boolean")
-                );
+                let syslog = doc["parameters"]["syslog"]
+                    .as_bool()
+                    .ok_or_else(|| "parameters.bool should be a boolean")?;
                 config.parameters.syslog = syslog;
             }
             if !doc["parameters"]["timeout"].is_badvalue() {
-                let timeout = try!(
-                    doc["parameters"]["timeout"]
-                        .as_i64()
-                        .ok_or("parameters.timeout should be a number")
-                );
+                let timeout = doc["parameters"]["timeout"]
+                    .as_i64()
+                    .ok_or_else(|| "parameters.timeout should be a number")?;
                 let timeout =
-                    try!(cast::u64(timeout).map_err(|_| format!("parameters.timeout is invalid")));
+                    cast::u64(timeout).map_err(|_| "parameters.timeout is invalid".to_string())?;
                 config.parameters.timeout = timeout;
             }
             if !doc["parameters"]["router-parallel"].is_badvalue() {
-                let router_parallel = try!(
-                    doc["parameters"]["router-parallel"]
-                        .as_i64()
-                        .ok_or("parameters.router-parallel should be a number")
-                );
-                let router_parallel =
-                    try!(cast::u64(router_parallel).map_err(|_| format!("parameters.router-parallel is invalid")));
+                let router_parallel = doc["parameters"]["router-parallel"]
+                    .as_i64()
+                    .ok_or_else(|| "parameters.router-parallel should be a number")?;
+                let router_parallel = cast::u64(router_parallel)
+                    .map_err(|_| "parameters.router-parallel is invalid".to_string())?;
                 config.parameters.router_parallel = router_parallel;
             }
         }

@@ -27,18 +27,18 @@ extern crate tokio_timer;
 extern crate yaml_rust;
 
 use clap::App;
-use std::thread;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 mod config;
-mod scraper;
-mod router;
-mod sink;
 mod lib;
 mod log;
+mod router;
+mod scraper;
+mod sink;
 
 include!("version.rs");
 
@@ -131,14 +131,14 @@ fn main() {
         handles.push(thread::spawn(move || {
             slog_scope::scope(
                 &slog_scope::logger().new(o!("scraper" => scraper.name.clone())),
-                || scraper::scraper(&scraper, &parameters, sigint),
+                || scraper::scraper(&scraper, &parameters, &sigint),
             );
         }));
     }
 
     // Spawn router
     info!("spawning router");
-    let mut router = router::Router::new(&config.sinks, &config.parameters, &config.labels); // FIXME
+    let mut router = router::Router::new(&config.sinks, &config.parameters, &config.labels);
     router.start();
 
     // Spawn sinks

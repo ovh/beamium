@@ -1,8 +1,8 @@
-use std::process::Command;
-use std::path::Path;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
+use std::process::Command;
 
 fn main() {
     let output = Command::new("git")
