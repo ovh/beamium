@@ -18,6 +18,7 @@ use futures::sync::mpsc::Sender;
 use futures::task::{current, Task};
 use futures::{Async, Future, Poll, Stream};
 
+use sink::SinkConfig;
 // use flate2::Compression;
 // use flate2::write::ZlibEncoder;
 
@@ -27,29 +28,26 @@ pub fn send_thread(
     client: Arc<
         hyper::Client<TimeoutConnector<HttpsConnector<hyper::client::HttpConnector>>, PayloadBody>,
     >,
-    token: String,
-    token_header: String,
-    url: hyper::Uri,
+    config: SinkConfig,
     todo: Arc<Mutex<VecDeque<PathBuf>>>,
-    batch_count: u64,
-    batch_size: u64,
     notify_tx: Sender<Task>,
 ) -> Box<Future<Item = (), Error = ()>> {
-    let work = PayloadStream::new(todo, batch_count, batch_size, notify_tx)
+    let work = PayloadStream::new(todo, config.batch_count, config.batch_size, notify_tx)
         .for_each(move |mut p| {
             let mut req: hyper::Request<PayloadBody> =
-                hyper::Request::new(hyper::Post, url.clone());
+                hyper::Request::new(hyper::Post, config.url.clone());
             req.set_body(p.body().expect("Body is never None"));
             req.headers_mut()
-                .set_raw(token_header.clone(), token.clone());
+                .set_raw(config.token_header.clone(), config.token.clone());
 
-            let req = client
+            client
                 .clone()
                 .request(req)
                 .and_then(|res| {
                     let status = res.status();
                     // TODO not read body if not debug
-                    let body = res.body()
+                    let body = res
+                        .body()
                         .fold(String::new(), |mut acc, chunk| {
                             ok::<String, hyper::Error>({
                                 acc.push_str(&String::from_utf8_lossy(&chunk));
@@ -91,13 +89,11 @@ pub fn send_thread(
                         }
                     };
                     ok(())
-                });
-
-            req
+                })
         })
         .then(|_| ok(()));
 
-    return Box::new(work);
+    Box::new(work)
 }
 
 struct PayloadStream {
@@ -115,10 +111,10 @@ impl PayloadStream {
         notify_tx: Sender<Task>,
     ) -> PayloadStream {
         PayloadStream {
-            batch_count: batch_count,
-            batch_size: batch_size,
-            todo: todo,
-            notify_tx: notify_tx,
+            batch_count,
+            batch_size,
+            todo,
+            notify_tx,
         }
     }
 }
@@ -159,7 +155,7 @@ impl Payload {
         let mut body = PayloadBody::new(todo.clone(), batch_count, batch_size);
         body.load(Some(file));
         Payload {
-            todo: todo,
+            todo,
             processed: body.processed(),
             sent_lines: body.sent_lines(),
             body: Some(body),
@@ -211,7 +207,7 @@ impl PayloadBody {
         PayloadBody {
             remaining_count: batch_count,
             remaining_size: batch_size as i64,
-            todo: todo,
+            todo,
             processed: Arc::new(Mutex::new(Vec::new())),
             reader: None,
             sent_lines: Arc::new(AtomicUsize::new(0)),
@@ -242,7 +238,7 @@ impl PayloadBody {
             debug!("load file {}", path.display());
             self.processed.lock().unwrap().push(path.clone());
 
-            self.remaining_count = self.remaining_count - 1;
+            self.remaining_count -= 1;
 
             match File::open(path.clone()) {
                 Err(err) => {
@@ -271,7 +267,8 @@ impl Stream for PayloadBody {
 
         // send file
         while idx < CHUNK_SIZE {
-            let size = self.reader
+            let size = self
+                .reader
                 .as_mut()
                 .expect("reader is never None")
                 .read_line(&mut s)?;
@@ -282,14 +279,14 @@ impl Stream for PayloadBody {
                     break; // No more work to do
                 }
             } else {
-                idx = idx + size;
-                sent_lines = sent_lines + 1;
+                idx += size;
+                sent_lines += 1;
             }
         }
 
         self.sent_lines.fetch_add(sent_lines, Ordering::Relaxed);
 
-        self.remaining_size = self.remaining_size - idx as i64;
+        self.remaining_size -= idx as i64;
         Ok(Async::Ready(Some(hyper::Chunk::from(s))))
     }
 }
