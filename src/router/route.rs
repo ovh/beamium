@@ -25,8 +25,9 @@ pub fn route_thread(
     loop {
         match todo.lock().unwrap().pop_front() {
             Some(path) => {
+                debug!("Processing: {:?}", path);
                 if let Err(err) = route(&path, &config, id) {
-                    warn!("{}", err);
+                    warn!("Fail to process:{:?} - {}", path, err);
                 }
             }
             None => {
@@ -99,11 +100,11 @@ fn route(path: &PathBuf, config: &RouterConfig, id: u64) -> Result<(), Box<Error
         let dest_file = dir.join(format!("{}-{}-{}.metrics", sink.name, id, run_id));
         debug!("rename {:?} to {:?}", sink_file_name, dest_file);
         fs::rename(sink_file_name, dest_file)?;
-
-        // Delete source file
-        debug!("delete  {}", format!("{:?}", path));
-        fs::remove_file(&path)?;
     }
+
+    // Delete source file
+    debug!("delete  {}", format!("{:?}", path));
+    fs::remove_file(&path)?;
 
     Ok(())
 }
