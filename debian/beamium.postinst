@@ -43,10 +43,14 @@ case "$1" in
     configure)
         chown -R beamium:beamium /var/log/beamium
         chown -R beamium:beamium /opt/beamium
+        # fix rights on logrotate
+        if [ -f "/etc/logrotate.d/$SERVICE" ]; then
+            chown root:root /etc/logrotate.d/$SERVICE
+        fi
         registerService
         STATUS=$(statusService) || true
         if [ "$STATUS" = "$SERVICE is running." ] ; then
-            echo  "$SERVICE is running: not restarting it."
+            echo "$SERVICE is running: not restarting it."
         else
             startService
         fi

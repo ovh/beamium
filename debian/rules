@@ -5,6 +5,9 @@
 #export DH_VERBOSE=1
 
 BUILD_DIR=$(CURDIR)/debian/tmp
+DISTRIBUTION = $(shell lsb_release -cs)
+VERSION = $(shell cat Cargo.toml | grep version | head -1 | awk -F "\"" '{print $$2}')
+PACKAGEVERSION = $(VERSION)-$(DISTRIBUTION)
 export CARGO_TARGET_DIR=$(BUILD_DIR)
 
 DEBIAN_VERSION = $(shell lsb_release -rs | cut -d . -f 1)
@@ -21,7 +24,7 @@ endif
 	dh $@ ${DH_ARGS}
 
 override_dh_auto_build:
-	cargo build
+	cargo build --release
 
 override_dh_install:
 	mkdir -p $(BUILD_DIR)/etc/beamium
@@ -30,3 +33,6 @@ override_dh_install:
 
 override_dh_prep:
 	dh_prep -Xdebian/tmp
+
+override_dh_gencontrol:
+	dh_gencontrol -- -v$(PACKAGEVERSION)
