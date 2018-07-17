@@ -2,6 +2,9 @@
 
 set -e
 
+SERVICE=beamium
+PID_FILE=/var/run/$SERVICE.pid
+
 case "$1" in
     install)
         # create a beamium group and user
@@ -11,6 +14,18 @@ case "$1" in
     ;;
 
     upgrade)
+        # remove old sysV if present
+        if systemctl status >/dev/null 2>&1; then
+            if [ -x "/etc/init.d/$SERVICE" ]; then
+                update-rc.d $SERVICE remove || true
+            fi
+            # stop old process
+            if [ -f "$PID_FILE" ]; then
+                pkill -9 --pidfile "$PID_FILE"
+                rm -f $PID_FILE
+                deb-systemd-invoke stop $SERVICE.service
+            fi
+        fi
     ;;
 
     *)

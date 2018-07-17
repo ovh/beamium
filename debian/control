@@ -1,10 +1,10 @@
 Source: beamium
 Section: default
 Priority: extra
-Maintainer: Aurélien Nephtali <aurelien.nephtali@corp.ovh.com>
-Build-Depends: debhelper (>= 8.0.0), git, pkg-config, libssl-dev, lsb-release
+Maintainer: Kevin GEORGES <kevin.georges@corp.ovh.com>
+Build-Depends: debhelper (>= 8.0.0), dh-systemd (>= 1.5), git, pkg-config, libssl-dev, lsb-release
 Standards-Version: 3.9.6
-Homepage: https://github.com/runabove/beamium
+Homepage: https://github.com/ovh/beamium
 
 Package: beamium
 Architecture: i386 amd64
