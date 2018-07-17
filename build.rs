@@ -1,5 +1,6 @@
 use std::process::Command;
 use std::path::Path;
+use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -11,7 +12,9 @@ fn main() {
         .expect("failed to execute process");
 
     let hash = String::from_utf8_lossy(&output.stdout);
-    let content = format!("static COMMIT: &'static str = {:?};\n", hash.trim());
+    let profile = env::var("PROFILE").expect("Expect to be built using cargo");
+    let mut content = format!("static COMMIT: &'static str = {:?};\n", hash.trim());
+    content += &format!("static PROFILE: &'static str = {:?};\n", profile);
 
     let path = Path::new("./src/version.rs");
 

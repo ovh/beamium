@@ -48,7 +48,12 @@ fn main() {
     log::bootstrap();
 
     let matches = App::new("beamium")
-        .version(&*format!("{} ({})", env!("CARGO_PKG_VERSION"), COMMIT))
+        .version(&*format!(
+            "{} ({}#{})",
+            env!("CARGO_PKG_VERSION"),
+            COMMIT,
+            PROFILE,
+        ))
         .author("d33d33 <kevin@d33d33.fr>")
         .about("Send Prometheus metrics to Warp10")
         .args_from_usage(
