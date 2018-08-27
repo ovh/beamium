@@ -23,7 +23,9 @@ pub fn route_thread(
     id: u64,
 ) {
     loop {
-        match todo.lock().unwrap().pop_front() {
+        let path = {todo.lock().unwrap().pop_front()};
+
+        match path {
             Some(path) => {
                 debug!("Processing: {:?}", path);
                 if let Err(err) = route(&path, &config, id) {
