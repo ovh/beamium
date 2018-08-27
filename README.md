@@ -109,6 +109,7 @@ parameters: # Parameters definitions (Optional)
   log-file: beamium.log # Log file                                      (Optional, default: beamium.log)
   log-level: 4          # Log level                                     (Optional, default: info)
   timeout: 500          # Http timeout (seconds)                        (Optional, default: 500)
+  router-parallel: 1    # Routing threads                               (Optional, default: 1)
 ```
 
 ## Contributing

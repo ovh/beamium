@@ -1,22 +1,22 @@
 //! # Log module.
 //!
 //! The Config module provides the log facility.
-use slog::Logger;
-use slog::Level;
-use slog::Duplicate;
-use slog::LevelFilter;
 use slog::Drain;
+use slog::Duplicate;
+use slog::Level;
+use slog::LevelFilter;
+use slog::Logger;
 use slog_async;
-use slog_term;
+use slog_scope;
 use slog_syslog;
 use slog_syslog::Facility;
-use slog_scope;
-use std::fs::OpenOptions;
-use std::os::unix::fs::OpenOptionsExt;
+use slog_term;
 use std;
-use std::path::Path;
 use std::error::Error;
 use std::fs;
+use std::fs::OpenOptions;
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Path;
 
 use config;
 
@@ -33,10 +33,9 @@ pub fn bootstrap() {
 /// Send log to console and log file, also handle log level.
 pub fn log(parameters: &config::Parameters, verbose: u64) -> Result<(), Box<Error>> {
     // Ensure log directory is present
-    match Path::new(&parameters.log_file).parent() {
-        Some(log_path) => fs::create_dir_all(log_path)?,
-        None => {}
-    };
+    if let Some(log_path) = Path::new(&parameters.log_file).parent() {
+        fs::create_dir_all(log_path)?
+    }
 
     // Stdout drain
     let term_decorator = slog_term::TermDecorator::new().build();

@@ -28,80 +28,84 @@ mod send;
 
 const REACTOR_CLIENT: usize = 30;
 
-pub struct Sink<'a> {
-    name: &'a String,
-    todo: Arc<Mutex<VecDeque<PathBuf>>>,
-    handles: Vec<thread::JoinHandle<()>>,
-    dir: &'a String,
-    watch_period: u64,
-    timeout: u64,
-    keep_alive: bool,
-    token: &'a String,
-    token_header: &'a String,
-    url: &'a hyper::Uri,
-    batch_count: u64,
-    batch_size: u64,
+#[derive(Debug, Clone)]
+pub struct SinkConfig {
+    name: String,
+    dir: String,
     max_size: u64,
     ttl: u64,
+    watch_period: u64,
     parallel: u64,
+    url: hyper::Uri,
+    timeout: u64,
+    keep_alive: bool,
+    token: String,
+    token_header: String,
+    batch_count: u64,
+    batch_size: u64,
+}
+
+pub struct Sink {
+    config: SinkConfig,
+    todo: Arc<Mutex<VecDeque<PathBuf>>>,
+    handles: Vec<thread::JoinHandle<()>>,
     sigint: (oneshot::Sender<()>, Shared<oneshot::Receiver<()>>),
 }
 
-impl<'a> Sink<'a> {
-    pub fn new(sink: &'a config::Sink, parameters: &'a config::Parameters) -> Sink<'a> {
+impl Sink {
+    pub fn new(sink: &config::Sink, parameters: &config::Parameters) -> Sink {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
+        let config = SinkConfig {
+            name: sink.name.clone(),
+            dir: parameters.sink_dir.clone(),
+            max_size: sink.size,
+            ttl: sink.ttl,
+            watch_period: parameters.scan_period,
+            parallel: sink.parallel,
+            url: sink.url.clone(),
+            timeout: parameters.timeout,
+            keep_alive: sink.keep_alive,
+            token: sink.token.clone(),
+            token_header: sink.token_header.clone(),
+            batch_count: parameters.batch_count,
+            batch_size: parameters.batch_size,
+        };
+
         Sink {
-            name: &sink.name,
+            config,
             todo: Arc::new(Mutex::new(VecDeque::new())),
             handles: Vec::new(),
             sigint: (shutdown_tx, shutdown_rx.shared()),
-            dir: &parameters.sink_dir,
-            watch_period: parameters.scan_period,
-            timeout: parameters.timeout,
-            keep_alive: sink.keep_alive,
-            token: &sink.token,
-            token_header: &sink.token_header,
-            url: &sink.url,
-            batch_count: parameters.batch_count,
-            batch_size: parameters.batch_size,
-            max_size: sink.size,
-            ttl: sink.ttl,
-            parallel: sink.parallel,
         }
     }
 
     pub fn start(&mut self) {
-        debug!("start sink: {}", self.name);
-        let (notify_tx, notify_rx) = channel(self.parallel as usize);
+        debug!("start sink: {}", self.config.name);
+        let (notify_tx, notify_rx) = channel(self.config.parallel as usize);
 
         // spawn fs thread
-        let (name, dir, todo) = (self.name.clone(), self.dir.clone(), self.todo.clone());
-        let (period, sigint) = (self.watch_period, self.sigint.1.clone());
-        let (max_size, ttl) = (self.max_size, self.ttl);
+        let (todo, sigint) = (self.todo.clone(), self.sigint.1.clone());
+        let config = self.config.clone();
 
         self.handles.push(thread::spawn(move || {
             slog_scope::scope(
-                &slog_scope::logger().new(o!("sink" => name.clone())),
-                || fs::fs_thread(&name, &dir, period, todo, max_size, ttl, sigint, notify_rx),
+                &slog_scope::logger().new(o!("sink" => config.name.clone())),
+                || fs::fs_thread(&todo, &config, &sigint, notify_rx),
             );
         }));
 
         // spawn sender threads
-        let reactor_count = (self.parallel as f64 / REACTOR_CLIENT as f64).ceil() as u64;
-        let client_count = (self.parallel as f64 / reactor_count as f64).ceil() as u64;
+        let reactor_count = (self.config.parallel as f64 / REACTOR_CLIENT as f64).ceil() as u64;
+        let client_count = (self.config.parallel as f64 / reactor_count as f64).ceil() as u64;
         for _ in 0..reactor_count {
-            let (name, sigint) = (self.name.clone(), self.sigint.1.clone());
-            let todo = self.todo.clone();
-            let url = self.url.clone();
-            let (timeout, keep_alive) = (self.timeout, self.keep_alive);
-            let (token, token_header) = (self.token.clone(), self.token_header.clone());
-            let (batch_count, batch_size) = (self.batch_count, self.batch_size);
+            let (todo, sigint) = (self.todo.clone(), self.sigint.1.clone());
             let notify_tx: Sender<Task> = notify_tx.clone();
+            let config = self.config.clone();
 
             self.handles.push(thread::spawn(move || {
                 slog_scope::scope(
-                    &slog_scope::logger().new(o!("sink" => name.clone())),
+                    &slog_scope::logger().new(o!("sink" => config.name.clone())),
                     || {
                         let mut core = Core::new().expect("Fail to start tokio reactor");
                         let handle = core.handle();
@@ -110,12 +114,12 @@ impl<'a> Sink<'a> {
 
                         // Handle connection timeouts
                         let mut tm = TimeoutConnector::new(connector, &handle);
-                        tm.set_connect_timeout(Some(Duration::from_secs(timeout)));
+                        tm.set_connect_timeout(Some(Duration::from_secs(config.timeout)));
 
                         let client = Arc::new(
                             hyper::Client::configure()
                                 .body::<send::PayloadBody>()
-                                .keep_alive(keep_alive)
+                                .keep_alive(config.keep_alive)
                                 .connector(tm)
                                 .build(&handle),
                         );
@@ -124,12 +128,8 @@ impl<'a> Sink<'a> {
                         for _ in 0..client_count {
                             let work = send::send_thread(
                                 client.clone(),
-                                token.clone(),
-                                token_header.clone(),
-                                url.clone(),
+                                config.clone(),
                                 todo.clone(),
-                                batch_count,
-                                batch_size,
                                 notify_tx.clone(),
                             );
 

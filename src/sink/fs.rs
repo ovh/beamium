@@ -20,15 +20,12 @@ use futures::{lazy, Async, Stream};
 use tokio_core::reactor::Core;
 
 use config;
+use sink::SinkConfig;
 
 pub fn fs_thread(
-    name: &str,
-    dir: &str,
-    period: u64,
-    todo: Arc<Mutex<VecDeque<PathBuf>>>,
-    max_size: u64,
-    ttl: u64,
-    sigint: Shared<oneshot::Receiver<()>>,
+    todo: &Arc<Mutex<VecDeque<PathBuf>>>,
+    config: &SinkConfig,
+    sigint: &Shared<oneshot::Receiver<()>>,
     mut notify_rx: Receiver<Task>,
 ) {
     let mut files: HashSet<PathBuf> = HashSet::new();
@@ -38,10 +35,13 @@ pub fn fs_thread(
     loop {
         let start = time::now_utc();
         let work = lazy(|| -> FutureResult<(), ()> {
-            match list(name, dir, &files, ttl) {
+            match list(&config.name, &config.dir, config.ttl) {
                 Err(err) => error!("list fail: {}", err),
-                Ok((new, deleted, size)) => {
-                    if new.len() > 0 {
+                Ok((entries, size)) => {
+                    let new: Vec<PathBuf> = entries.difference(&files).cloned().collect();
+                    let deleted: Vec<PathBuf> = files.difference(&entries).cloned().collect();
+
+                    if !new.is_empty() {
                         debug!("found {} files", new.len());
                     }
 
@@ -71,7 +71,7 @@ pub fn fs_thread(
                         files.remove(&f);
                     }
 
-                    match cappe(size, max_size, &todo) {
+                    match cappe(size, config.max_size, &todo) {
                         Err(err) => error!("cappe fail: {}", err),
                         Ok(()) => {}
                     }
@@ -83,10 +83,10 @@ pub fn fs_thread(
         core.run(work).expect("always ok");
 
         let elapsed = (time::now_utc() - start).num_milliseconds() as u64;
-        let sleep_time = if elapsed > period {
+        let sleep_time = if elapsed > config.watch_period {
             config::REST_TIME
         } else {
-            cmp::max(period - elapsed, config::REST_TIME)
+            cmp::max(config.watch_period - elapsed, config::REST_TIME)
         };
         for _ in 0..sleep_time / config::REST_TIME {
             thread::sleep(Duration::from_millis(config::REST_TIME));
@@ -97,12 +97,7 @@ pub fn fs_thread(
     }
 }
 
-fn list(
-    sink_name: &str,
-    dir: &str,
-    files: &HashSet<PathBuf>,
-    ttl: u64,
-) -> Result<(Vec<PathBuf>, Vec<PathBuf>, u64), Box<Error>> {
+fn list(sink_name: &str, dir: &str, ttl: u64) -> Result<(HashSet<PathBuf>, u64), Box<Error>> {
     let mut sink_name = String::from(sink_name);
     sink_name.push('-');
 
@@ -127,10 +122,10 @@ fn list(
             let meta = entry.metadata();
             if meta.is_ok() {
                 let meta = meta.unwrap();
-                files_size = files_size + meta.len();
+                files_size += meta.len();
 
-                let modified = meta.modified().unwrap_or(SystemTime::now());
-                let age = modified.elapsed().unwrap_or(Duration::new(0, 0));
+                let modified = meta.modified().unwrap_or_else(|_| SystemTime::now());
+                let age = modified.elapsed().unwrap_or_else(|_| Duration::new(0, 0));
 
                 if age.as_secs() > ttl {
                     warn!("skip file {:?}", entry.path());
@@ -146,10 +141,7 @@ fn list(
         })
         .collect();
 
-    let deleted = files.difference(&entries).cloned().collect();
-    let new = entries.difference(&files).cloned().collect();
-
-    Ok((new, deleted, files_size))
+    Ok((entries, files_size))
 }
 
 fn cappe(actual: u64, target: u64, todo: &Arc<Mutex<VecDeque<PathBuf>>>) -> Result<(), Box<Error>> {
@@ -167,7 +159,7 @@ fn cappe(actual: u64, target: u64, todo: &Arc<Mutex<VecDeque<PathBuf>>>) -> Resu
         let path = path.unwrap();
 
         let meta = fs::metadata(&path)?;
-        size = size - meta.len();
+        size -= meta.len();
 
         warn!("skip file {:?}", path);
         fs::remove_file(path)?;
@@ -182,7 +174,7 @@ fn cappe(actual: u64, target: u64, todo: &Arc<Mutex<VecDeque<PathBuf>>>) -> Resu
 
 fn remove_empty(path: &PathBuf) -> Result<bool, Box<Error>> {
     let metadata = fs::metadata(path.clone())?;
-    if metadata.len() <= 0 {
+    if metadata.len() == 0 {
         fs::remove_file(path.clone())?;
 
         return Ok(true);
