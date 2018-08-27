@@ -1,23 +1,23 @@
 //! # Scraper module.
 //!
 //! The Scraper module fetch metrics from an HTTP endpoint.
-use std::thread;
-use std::time::Duration;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use time;
-use std::io;
-use std::cmp;
-use hyper;
-use hyper_tls::HttpsConnector;
-use hyper_timeout::TimeoutConnector;
 use futures::future::Future;
 use futures::Stream;
-use std::io::prelude::*;
+use hyper;
+use hyper_timeout::TimeoutConnector;
+use hyper_tls::HttpsConnector;
+use std::cmp;
+use std::error::Error;
 use std::fs;
 use std::fs::File;
-use std::error::Error;
+use std::io;
+use std::io::prelude::*;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use time;
 
 use config;
 
@@ -30,7 +30,7 @@ const REST_TIME: u64 = 10;
 pub fn scraper(
     scraper: &config::Scraper,
     parameters: &config::Parameters,
-    sigint: Arc<AtomicBool>,
+    sigint: &Arc<AtomicBool>,
 ) {
     let labels: String = scraper.labels.iter().fold(String::new(), |acc, (k, v)| {
         let sep = if acc.is_empty() { "" } else { "," };
@@ -68,9 +68,9 @@ fn fetch(
     debug!("fetch {}", &scraper.url);
 
     // Fetch metrics
-    let mut core = try!(::tokio_core::reactor::Core::new());
+    let mut core = ::tokio_core::reactor::Core::new()?;
     let handle = core.handle();
-    let connector = try!(HttpsConnector::new(4, &handle));
+    let connector = HttpsConnector::new(4, &handle)?;
 
     let mut tm = TimeoutConnector::new(connector, &handle);
     tm.set_connect_timeout(Some(Duration::from_secs(parameters.timeout)));
@@ -80,7 +80,7 @@ fn fetch(
     let client = hyper::Client::configure().connector(tm).build(&handle);
     let mut req = hyper::Request::new(hyper::Method::Get, scraper.url.clone());
 
-    for (key, value) in scraper.headers.iter() {
+    for (key, value) in &scraper.headers {
         req.headers_mut()
             .set_raw(key.clone(), vec![value.clone().into_bytes()]);
     }
@@ -107,7 +107,7 @@ fn fetch(
 
     // Get now as millis
     let start = time::now_utc();
-    let now = start.to_timespec().sec * 1000 * 1000 + (start.to_timespec().nsec as i64 / 1000);
+    let now = start.to_timespec().sec * 1000 * 1000 + (i64::from(start.to_timespec().nsec) / 1000);
 
     let dir = Path::new(&parameters.source_dir);
     let temp_file = dir.join(format!("{}.tmp", scraper.name));
@@ -116,7 +116,7 @@ fn fetch(
     debug!("write to tmp file {}", format!("{:?}", temp_file));
     {
         // Open tmp file
-        let mut file = try!(File::create(&temp_file));
+        let mut file = File::create(&temp_file)?;
         let ts = lib::transcompiler::Transcompiler::new(&scraper.format);
 
         for line in body.lines() {
@@ -140,18 +140,17 @@ fn fetch(
                 }
             };
 
-            if scraper.metrics.is_some() {
-                if !scraper.metrics.as_ref().unwrap().is_match(&line) {
-                    continue;
-                }
+            if scraper.metrics.is_some() && !scraper.metrics.as_ref().unwrap().is_match(&line) {
+                continue;
             }
 
             batch_size += line.len();
-            if batch_size > parameters.batch_size as usize && !line.starts_with("=") {
+            if batch_size > parameters.batch_size as usize && !line.starts_with('=') {
                 // Rotate scraped file
                 file.flush()?;
 
-                let dest_file = dir.join(format!("{}-{}-{}.metrics", scraper.name, now, batch_count));
+                let dest_file =
+                    dir.join(format!("{}-{}-{}.metrics", scraper.name, now, batch_count));
                 debug!("rotate tmp file to {}", format!("{:?}", dest_file));
                 fs::rename(&temp_file, &dest_file)?;
 
@@ -160,8 +159,8 @@ fn fetch(
                 batch_count += 1;
             }
 
-            file.write(line.as_bytes())?;
-            file.write(b"\n")?;
+            file.write_all(line.as_bytes())?;
+            file.write_all(b"\n")?;
         }
 
         file.flush()?;
@@ -170,7 +169,7 @@ fn fetch(
     // Rotate scraped file
     let dest_file = dir.join(format!("{}-{}-{}.metrics", scraper.name, now, batch_count));
     debug!("rotate tmp file to {}", format!("{:?}", dest_file));
-    try!(fs::rename(&temp_file, &dest_file));
+    fs::rename(&temp_file, &dest_file)?;
 
     Ok(())
 }

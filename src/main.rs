@@ -27,18 +27,18 @@ extern crate tokio_timer;
 extern crate yaml_rust;
 
 use clap::App;
-use std::thread;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 mod config;
-mod scraper;
-mod router;
-mod sink;
 mod lib;
 mod log;
+mod router;
+mod scraper;
+mod sink;
 
 include!("version.rs");
 
@@ -131,26 +131,15 @@ fn main() {
         handles.push(thread::spawn(move || {
             slog_scope::scope(
                 &slog_scope::logger().new(o!("scraper" => scraper.name.clone())),
-                || scraper::scraper(&scraper, &parameters, sigint),
+                || scraper::scraper(&scraper, &parameters, &sigint),
             );
         }));
     }
 
     // Spawn router
     info!("spawning router");
-    {
-        let (sinks, labels, parameters, sigint) = (
-            config.sinks.clone(),
-            config.labels.clone(),
-            config.parameters.clone(),
-            sigint.clone(),
-        );
-        handles.push(thread::spawn(move || {
-            slog_scope::scope(&slog_scope::logger().new(o!()), || {
-                router::router(&sinks, &labels, &parameters, sigint)
-            });
-        }));
-    }
+    let mut router = router::Router::new(&config.sinks, &config.parameters, &config.labels);
+    router.start();
 
     // Spawn sinks
     info!("spawning sinks");
@@ -177,6 +166,8 @@ fn main() {
     for handle in handles {
         handle.join().unwrap();
     }
+
+    router.stop();
 
     for s in sinks {
         s.stop();

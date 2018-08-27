@@ -11,17 +11,15 @@ pub struct Transcompiler<'a> {
 impl<'a> Transcompiler<'a> {
     pub fn new(format: &config::ScraperFormat) -> Transcompiler {
         let start = time::now_utc();
-        let now = start.to_timespec().sec * 1000 * 1000 + (start.to_timespec().nsec as i64 / 1000);
-        Transcompiler {
-            format: format,
-            now: now,
-        }
+        let now = start.to_timespec().sec * 1000 * 1000
+            + (i64::from(start.to_timespec().nsec) as i64 / 1000);
+        Transcompiler { format, now }
     }
 
     pub fn format(&self, line: &str) -> Result<String, Box<Error>> {
-        match self.format {
-            &config::ScraperFormat::Sensision => format_warp10(line),
-            &config::ScraperFormat::Prometheus => format_prometheus(line, self.now),
+        match *self.format {
+            config::ScraperFormat::Sensision => format_warp10(line),
+            config::ScraperFormat::Prometheus => format_prometheus(line, self.now),
         }
     }
 }
@@ -36,12 +34,12 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     let line = line.trim();
 
     // Skip comments
-    if line.starts_with("#") {
+    if line.starts_with('#') {
         return Ok(String::new());
     }
 
     // Extract Prometheus metric
-    let index = if line.contains("{") {
+    let index = if line.contains('{') {
         line.rfind('}').ok_or("bad class")?
     } else {
         line.find(' ').ok_or("bad class")?
@@ -62,7 +60,7 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
         .unwrap_or(now);
 
     // Format class
-    let mut parts = class.splitn(2, "{");
+    let mut parts = class.splitn(2, '{');
     let class = String::from(parts.next().ok_or("no_class")?);
     let class = class.trim();
     let plabels = parts.next();
@@ -78,7 +76,7 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
             .map(|v| v.replace(r"\n", "%0A")) // unescape
             .fold(String::new(), |acc, x| {
                 // skip invalid values
-                if !x.contains("=") {
+                if !x.contains('=') {
                     return acc
                 }
                 acc + &x + ","
