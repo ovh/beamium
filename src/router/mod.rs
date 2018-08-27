@@ -5,10 +5,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::thread;
-
-use futures::future::Shared;
-use futures::sync::oneshot;
-use futures::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use config;
@@ -31,7 +28,7 @@ pub struct Router {
     config: RouterConfig,
     todo: Arc<Mutex<VecDeque<PathBuf>>>,
     handles: Vec<thread::JoinHandle<()>>,
-    sigint: (oneshot::Sender<()>, Shared<oneshot::Receiver<()>>),
+    sigint: Arc<AtomicBool>,
 }
 
 impl Router {
@@ -40,7 +37,7 @@ impl Router {
         parameters: &config::Parameters,
         labels: &HashMap<String, String>,
     ) -> Router {
-        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let sigint = Arc::new(AtomicBool::new(false));
         // Build labels string
         let labels: String = labels.iter().fold(String::new(), |acc, (k, v)| {
             let sep = if acc.is_empty() { "" } else { "," };
@@ -60,7 +57,7 @@ impl Router {
             config,
             todo: Arc::new(Mutex::new(VecDeque::new())),
             handles: Vec::new(),
-            sigint: (shutdown_tx, shutdown_rx.shared()),
+            sigint: sigint,
         }
     }
 
@@ -68,7 +65,7 @@ impl Router {
         debug!("start router");
 
         // spawn fs thread
-        let (todo, sigint) = (self.todo.clone(), self.sigint.1.clone());
+        let (todo, sigint) = (self.todo.clone(), self.sigint.clone());
         let config = self.config.clone();
 
         self.handles.push(thread::spawn(move || {
@@ -79,7 +76,7 @@ impl Router {
 
         // spawn router threads
         for idx in 0..self.config.parallel {
-            let (todo, sigint) = (self.todo.clone(), self.sigint.1.clone());
+            let (todo, sigint) = (self.todo.clone(), self.sigint.clone());
             let config = self.config.clone();
 
             self.handles.push(thread::spawn(move || {
@@ -91,7 +88,7 @@ impl Router {
     }
 
     pub fn stop(self) {
-        self.sigint.0.send(()).unwrap();
+        self.sigint.store(true, Ordering::SeqCst);
         for handle in self.handles {
             handle.join().unwrap();
         }

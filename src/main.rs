@@ -116,7 +116,7 @@ fn main() {
 
     // Synchronisation stuff
     let sigint = Arc::new(AtomicBool::new(false));
-    let mut handles = Vec::with_capacity(config.scrapers.len() + 1);
+    let mut handles = Vec::with_capacity(config.scrapers.len());
 
     // Sigint handling
     let r = sigint.clone();
