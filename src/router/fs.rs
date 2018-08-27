@@ -7,11 +7,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use time;
-
-use futures::future::Shared;
-use futures::sync::oneshot;
 
 use config;
 use router::RouterConfig;
@@ -19,7 +17,7 @@ use router::RouterConfig;
 pub fn fs_thread(
     config: &RouterConfig,
     todo: &Arc<Mutex<VecDeque<PathBuf>>>,
-    sigint: &Shared<oneshot::Receiver<()>>,
+    sigint: &Arc<AtomicBool>,
 ) {
     let mut files: HashSet<PathBuf> = HashSet::new();
 
@@ -56,7 +54,7 @@ pub fn fs_thread(
         };
         for _ in 0..sleep_time / config::REST_TIME {
             thread::sleep(Duration::from_millis(config::REST_TIME));
-            if sigint.peek().is_some() {
+            if sigint.load(Ordering::Relaxed) {
                 return;
             }
         }

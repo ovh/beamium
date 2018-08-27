@@ -7,11 +7,11 @@ use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use time;
 
 use config;
-use futures::future::Shared;
-use futures::sync::oneshot;
 use lib;
 use router::RouterConfig;
 use std::sync::{Arc, Mutex};
@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 pub fn route_thread(
     config: &RouterConfig,
     todo: &Arc<Mutex<VecDeque<PathBuf>>>,
-    sigint: &Shared<oneshot::Receiver<()>>,
+    sigint: &Arc<AtomicBool>,
     id: u64,
 ) {
     loop {
@@ -37,7 +37,7 @@ pub fn route_thread(
             }
         }
 
-        if sigint.peek().is_some() {
+        if sigint.load(Ordering::Relaxed) {
             return;
         }
     }
