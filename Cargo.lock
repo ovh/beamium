@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "beamium"
-version = "1.9.1"
+version = "1.9.2"
 dependencies = [
  "bytes 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "cast 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
