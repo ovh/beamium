@@ -21,7 +21,9 @@ case "$1" in
             fi
             # stop old process
             if [ -f "$PID_FILE" ]; then
-                pkill -9 --pidfile "$PID_FILE"
+                if pgrep --pidfile $PID_FILE 2>/dev/null; then
+                    pkill -9 --pidfile "$PID_FILE"
+                fi
                 rm -f $PID_FILE
                 deb-systemd-invoke stop $SERVICE.service
             fi
