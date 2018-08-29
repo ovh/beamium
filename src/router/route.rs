@@ -5,9 +5,9 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use time;
 
@@ -23,7 +23,7 @@ pub fn route_thread(
     id: u64,
 ) {
     loop {
-        let path = {todo.lock().unwrap().pop_front()};
+        let path = { todo.lock().unwrap().pop_front() };
 
         match path {
             Some(path) => {
