@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::thread;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 use config;
 use slog_scope;

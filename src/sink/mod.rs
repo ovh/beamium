@@ -43,6 +43,7 @@ pub struct SinkConfig {
     token_header: String,
     batch_count: u64,
     batch_size: u64,
+    backoff: config::Backoff,
 }
 
 pub struct Sink {
@@ -70,6 +71,7 @@ impl Sink {
             token_header: sink.token_header.clone(),
             batch_count: parameters.batch_count,
             batch_size: parameters.batch_size,
+            backoff: parameters.backoff.clone(),
         };
 
         Sink {

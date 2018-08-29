@@ -8,21 +8,27 @@ use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use hyper;
 use hyper_timeout::TimeoutConnector;
 use hyper_tls::HttpsConnector;
 
-use futures::future::{ok, FutureResult};
+use futures::future::ok;
 use futures::sync::mpsc::Sender;
 use futures::task::{current, Task};
 use futures::{Async, Future, Poll, Stream};
 
-use sink::SinkConfig;
+use tokio_timer::Delay;
+
+use backoff::backoff::Backoff;
+use backoff::ExponentialBackoff;
+
 // use flate2::Compression;
 // use flate2::write::ZlibEncoder;
 
-const CHUNK_SIZE: usize = 1024 * 1024;
+use config;
+use sink::SinkConfig;
 
 pub fn send_thread(
     client: Arc<
@@ -32,8 +38,15 @@ pub fn send_thread(
     todo: Arc<Mutex<VecDeque<PathBuf>>>,
     notify_tx: Sender<Task>,
 ) -> Box<Future<Item = (), Error = ()>> {
+    let mut backoff = ExponentialBackoff::default();
+    backoff.initial_interval = config.backoff.initial;
+    backoff.max_interval = config.backoff.max;
+    backoff.multiplier = config.backoff.multiplier;
+    backoff.randomization_factor = config.backoff.randomization;
+    backoff.max_elapsed_time = None;
+
     let work = PayloadStream::new(todo, config.batch_count, config.batch_size, notify_tx)
-        .for_each(move |mut p| {
+        .fold(backoff, move |mut backoff, mut p| {
             let mut req: hyper::Request<PayloadBody> =
                 hyper::Request::new(hyper::Post, config.url.clone());
             req.set_body(p.body().expect("Body is never None"));
@@ -58,7 +71,7 @@ pub fn send_thread(
 
                     ok(status).join(body)
                 })
-                .then(move |res| -> FutureResult<(), ()> {
+                .then(move |res| {
                     let state = match res {
                         Err(error) => {
                             error!("HTTP error: {}", error);
@@ -82,13 +95,24 @@ pub fn send_thread(
                         Err(_) => {
                             // recover processed file
                             p.abort();
+                            Err(backoff)
                         }
                         Ok(_) => {
                             let sent = p.commit();
+                            backoff.reset();
                             info!("post success - {}", sent);
+                            Ok(backoff)
                         }
-                    };
-                    ok(())
+                    }
+                })
+                .or_else(|mut backoff| {
+                    let delay = backoff
+                        .next_backoff()
+                        .expect("never None as max_elapsed_time is None");
+                    if delay > config::BACKOFF_WARN {
+                        warn!("backoff: {:?}", delay);
+                    }
+                    Delay::new(Instant::now() + delay).then(|_| ok(backoff))
                 })
         })
         .then(|_| ok(()));
@@ -261,12 +285,12 @@ impl Stream for PayloadBody {
             return Ok(Async::Ready(None));
         }
 
-        let mut s = String::with_capacity(CHUNK_SIZE);
+        let mut s = String::with_capacity(config::CHUNK_SIZE);
         let mut idx = 0;
         let mut sent_lines = 0;
 
         // send file
-        while idx < CHUNK_SIZE {
+        while idx < config::CHUNK_SIZE {
             let size = self
                 .reader
                 .as_mut()

@@ -1,6 +1,7 @@
 //! # Beamium.
 //!
 //! Beamium scrap Prometheus endpoint and forward metrics to Warp10.
+extern crate backoff;
 extern crate bytes;
 extern crate cast;
 extern crate clap;
@@ -8,6 +9,7 @@ extern crate core;
 extern crate ctrlc;
 extern crate flate2;
 extern crate futures;
+extern crate humantime;
 extern crate hyper;
 extern crate hyper_timeout;
 extern crate hyper_tls;
