@@ -1,13 +1,15 @@
 [package]
 name = "beamium"
-version = "1.9.2"
+version = "1.9.3"
 authors = [ "d33d33 <kevin.georges@corp.ovh.com>" ]
 
 build = "build.rs"
 
 [dependencies]
+backoff = "0.1.2"
 bytes = "0.4"
 clap = "2.29.0"
+humantime="1.1.1"
 yaml-rust = "0.4.0"
 cast = "0.2.2"
 nix = "0.7.0"
@@ -25,7 +27,7 @@ slog-scope = "4.0.1"
 slog-syslog = "0.11.0"
 flate2 = "1.0.1"
 ctrlc = "3.0"
-tokio-timer="0.1"
+tokio-timer="0.2.6"
 
 [dependencies.slog]
 version = "2.1"

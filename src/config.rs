@@ -4,6 +4,7 @@
 //! It set defaults and then load config from '/etc', local dir and provided path.
 
 use cast;
+use humantime::parse_duration;
 use hyper;
 use regex;
 use slog;
@@ -16,9 +17,12 @@ use std::io;
 use std::io::Read;
 use std::path::Path;
 use std::string::String;
+use std::time::Duration;
 use yaml_rust::{ScanError, YamlLoader};
 
 pub const REST_TIME: u64 = 10;
+pub const BACKOFF_WARN: Duration = Duration::from_millis(1000);
+pub const CHUNK_SIZE: usize = 1024 * 1024;
 
 #[derive(Debug, Clone)]
 /// Config root.
@@ -75,6 +79,16 @@ pub struct Parameters {
     pub syslog: bool,
     pub timeout: u64,
     pub router_parallel: u64,
+    pub backoff: Backoff,
+}
+
+#[derive(Debug, Clone)]
+/// Backoff config.
+pub struct Backoff {
+    pub initial: Duration,
+    pub max: Duration,
+    pub multiplier: f64,
+    pub randomization: f64,
 }
 
 #[derive(Debug)]
@@ -178,6 +192,12 @@ pub fn load_config(config_path: &str) -> Result<Config, ConfigError> {
             syslog: false,
             timeout: 300,
             router_parallel: 1,
+            backoff: Backoff {
+                initial: Duration::from_millis(500),
+                max: Duration::from_millis(60_000),
+                multiplier: 1.5,
+                randomization: 0.3,
+            },
         },
     };
 
@@ -511,6 +531,62 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                 let router_parallel = cast::u64(router_parallel)
                     .map_err(|_| "parameters.router-parallel is invalid".to_string())?;
                 config.parameters.router_parallel = router_parallel;
+            }
+
+            if !doc["parameters"]["backoff"].is_badvalue() {
+                if !doc["parameters"]["backoff"]["initial"].is_badvalue() {
+                    let v = &doc["parameters"]["backoff"]["initial"];
+                    let initial = v
+                        .as_i64()
+                        .and_then(|initial| cast::u64(initial).ok())
+                        .map(|initial| Duration::from_millis(initial))
+                        .or_else(|| v.as_str().and_then(|initial| parse_duration(initial).ok()))
+                        .ok_or_else(|| {
+                            "parameters.backoff.initial should be a duration string".to_string()
+                        })?;
+                    config.parameters.backoff.initial = initial;
+                }
+
+                if !doc["parameters"]["backoff"]["max"].is_badvalue() {
+                    let v = &doc["parameters"]["backoff"]["max"];
+                    let max = v
+                        .as_i64()
+                        .and_then(|max| cast::u64(max).ok())
+                        .map(|max| Duration::from_millis(max))
+                        .or_else(|| v.as_str().and_then(|max| parse_duration(max).ok()))
+                        .ok_or_else(|| {
+                            "parameters.backoff.max should be a duration string".to_string()
+                        })?;
+                    config.parameters.backoff.max = max;
+                }
+
+                if !doc["parameters"]["backoff"]["multiplier"].is_badvalue() {
+                    let v = &doc["parameters"]["backoff"]["multiplier"];
+                    let multiplier = v.as_f64().ok_or_else(|| {
+                        "parameters.backoff.multiplier should be a number".to_string()
+                    })?;
+
+                    if multiplier < 0.0 {
+                        return Err(ConfigError::from(
+                            "parameters.backoff.multiplier is negative",
+                        ));
+                    }
+                    config.parameters.backoff.multiplier = multiplier;
+                }
+
+                if !doc["parameters"]["backoff"]["randomization"].is_badvalue() {
+                    let v = &doc["parameters"]["backoff"]["randomization"];
+                    let randomization = v.as_f64().ok_or_else(|| {
+                        "parameters.backoff.randomization should be a number".to_string()
+                    })?;
+
+                    if randomization < 0.0 || randomization > 1.0 {
+                        return Err(ConfigError::from(
+                            "parameters.backoff.randomization should in [0-1]",
+                        ));
+                    }
+                    config.parameters.backoff.randomization = randomization;
+                }
             }
         }
     }
