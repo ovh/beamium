@@ -34,8 +34,9 @@ Beamium is currently under development.
 ## Install
 We provide deb packages for Beamium!
 ```
+sudo apt-get install apt-transport-https
 sudo lsb_release -a | grep Codename | awk '{print "deb https://last-public-ovh-metrics.snap.mirrors.ovh.net/debian/ " $2 " main"}' >> /etc/apt/sources.list.d/beamium.list
-sudo apt-key adv --recv-keys --keyserver https://last-public-ovh-metrics.snap.mirrors.ovh.net/pub.key A7F0D217C80D5BB8
+curl https://last-public-ovh-metrics.snap.mirrors.ovh.net/pub.key | sudo apt-key add -
 sudo apt-get update
 sudo apt-get install beamium
 ```
