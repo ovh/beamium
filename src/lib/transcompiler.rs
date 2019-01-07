@@ -49,8 +49,8 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
 
     let value = tokens.next().ok_or("no value")?;
 
-    // Prometheus value can be '-Inf' or '+Inf', skipping if so
-    if value == "+Inf" || value == "-Inf" {
+    // Prometheus value can be '-Inf', '+Inf', 'nan', 'NaN' skipping if so
+    if value == "+Inf" || value == "-Inf" || value == "nan" || value == "NaN" {
         return Ok(String::new());
     }
 
@@ -105,6 +105,21 @@ mod tests {
         assert_eq!(expected.unwrap(), result.unwrap());
 
         let line = "f{job_id=\"123\"} -Inf";
+        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+    }
+
+    #[test]
+    fn prometheus_skip_nan() {
+        let line = "f{job_id=\"123\"} nan";
+        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"123\"} NaN";
         let expected: Result<String, Box<Error>> = Ok(String::new());
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
