@@ -62,15 +62,17 @@ Config is composed of four parts:
 #### Scrapers
 Beamium can have none to many Prometheus or Warp10/Sensision endpoints. A *scraper* is defined as follow:
 ``` yaml
-scrapers: # Scrapers definitions (Optional)
+scrapers:                              # Scrapers definitions (Optional)
   scraper1:                            # Source name                  (Required)
     url: http://127.0.0.1:9100/metrics # Prometheus endpoint          (Required)
     period: 10000                      # Polling interval(ms)         (Required)
     format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])
-    labels:                            # Labels definitions (Optional)
+    labels:                            # Labels definitions           (Optional)
       label_name: label_value          # Label definition             (Required)
-    metrics:                           # Filter fetched metrics       (Optional)
-      - node.*                         # Regex used to select metrics (Required)
+    filtered_labels:                   # filtered labels              (optional)
+      - jobid                          # key label which is removed   (required)
+    metrics:                           # filter fetched metrics       (optional)
+      - node.*                         # regex used to select metrics (required)
     headers:                           # Add custom header on request (Optional)
       X-Toto: tata                     # list of headers to add       (Optional)
       Authorization: Basic XXXXXXXX
