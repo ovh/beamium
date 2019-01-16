@@ -134,8 +134,16 @@ fn fetch(
 
             let line = match lib::add_labels(&line, labels) {
                 Ok(v) => v,
-                Err(_) => {
-                    warn!("fail to add label on {}", &line);
+                Err(err) => {
+                    warn!("fail to add label on {}", &line; "error" => err.to_string());
+                    continue;
+                }
+            };
+
+            let line = match lib::remove_labels(&line, &scraper.filtered_labels) {
+                Ok(v) => v,
+                Err(err) => {
+                    warn!("fail to remove label on {}", &line; "error" => err.to_string());
                     continue;
                 }
             };

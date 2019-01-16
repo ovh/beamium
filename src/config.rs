@@ -43,6 +43,7 @@ pub struct Scraper {
     pub metrics: Option<regex::RegexSet>,
     pub headers: HashMap<String, String>,
     pub labels: HashMap<String, String>,
+    pub filtered_labels: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -272,6 +273,23 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                             ).into());
                         }
                     };
+
+                    let filtered_labels = if v["filtered_labels"].is_badvalue() {
+                        vec![]
+                    } else {
+                        let mut labels = vec![];
+                        let values = v["filtered_labels"].as_vec().ok_or_else(|| {
+                            format!("scrapers.{}.filtered_labels should be an array", name)
+                        })?;
+                        for v in values {
+                            let value = v.as_str().ok_or_else(|| {
+                                format!("scrapers.{}.filtered_labels is invalid", name)
+                            })?;
+                            labels.push(String::from(value));
+                        }
+                        labels
+                    };
+
                     let metrics = if v["metrics"].is_badvalue() {
                         None
                     } else {
@@ -341,6 +359,7 @@ fn load_path<P: AsRef<Path>>(file_path: P, config: &mut Config) -> Result<(), Co
                         metrics,
                         headers,
                         labels,
+                        filtered_labels,
                     })
                 }
             }
