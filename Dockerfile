@@ -1,20 +1,17 @@
-FROM debian:jessie
+FROM debian:stretch
 
 ENV DEBIAN_FRONTEND=noninteractive
 ARG METRICS_APT_URL=http://last.public.ovh.metrics.snap.mirrors.ovh.net
 
-RUN    apt-get update \
-    && apt-get install -y --no-install-recommends \
-         gnupg \
-    && echo "deb $METRICS_APT_URL/debian jessie main" >> /etc/apt/sources.list.d/metrics.list \
-    && apt-key adv \
-         --keyserver $METRICS_APT_URL/pub.key \
-         --recv-keys A7F0D217C80D5BB8 \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libssl-dev \
-        beamium \
-        ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+        && apt-get install -y apt-transport-https curl gnupg gettext-base \
+        && echo "deb $METRICS_APT_URL/debian stretch main" >> /etc/apt/sources.list.d/beamium.list \
+        && curl https://last-public-ovh-metrics.snap.mirrors.ovh.net/pub.key | apt-key add - \
+        && apt-get update \
+        && apt-get install -y beamium libssl-dev ca-certificates \
+        && rm -rf /var/lib/apt/lists/*
 
+ADD entrypoint.sh /
+
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["beamium"]
