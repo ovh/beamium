@@ -1,16 +1,76 @@
 language: rust
+
+os:
+- linux
+
 rust:
 - stable
 - beta
 - nightly
+
+cache:
+- apt
+
 matrix:
   allow_failures:
   - rust: nightly
+# https://medium.com/@tyrf/multi-target-rust-builds-with-auto-deployment-in-travis-ci-ab5214fb73ba
+  include:
+  - env:
+    - NAME=YOURPACKETNAME
+    - TARGET=arm-unknown-linux-gnueabihf
+    - LINKER=arm-linux-gnueabihf-gcc
+    - PACKAGE=$NAME-rpi2.tar.gz
+    addons:
+      apt:
+        packages: &armhf
+          - gcc-arm-linux-gnueabihf
+          - libc6-armhf-cross
+          - libc6-dev-armhf-cross
+  - env:
+    - NAME=YOURPACKETNAME
+    - TARGET=armv7-unknown-linux-gnueabihf
+    - LINKER=arm-linux-gnueabihf-gcc
+    - PACKAGE=$NAME-rpi3.tar.gz
+    addons:
+      apt:
+        packages: *armhf
+  - env:
+    - NAME=YOURPACKETNAME
+    - TARGET=i686-unknown-linux-gnu
+    - PACKAGE=$NAME-i686.tar.gz
+    addons:
+      apt:
+        packages:
+        - gcc-multilib
+  - env:
+    - NAME=YOURPACKETNAME
+    - TARGET=x86_64-unknown-linux-gnu
+    - PACKAGE=$NAME-x86_64.tar.gz
+
+
+install:
+  - export PATH="$PATH:$HOME/.cargo/bin"
+  - rustup target add $TARGET || true
+  - |
+    if [ -n "$LINKER" ]; then
+      mkdir -p ~/.cargo
+      echo >> ~/.cargo/config
+      echo "[target.$TARGET]" >> ~/.cargo/config
+      echo "linker = \"$LINKER\"" >> ~/.cargo/config
+    fi
+
 before_script:
 - PATH=$PATH:/home/travis/.cargo/bin
+- apt install libssl-dev
+
 script:
-- cargo build --verbose
-before_deploy: "cargo build --release"
+- |
+  if [ $TARGET = "x86_64-unknown-linux-gnu" ]; then
+    cargo test
+  fi
+- cargo build --target $TARGET --verbose --release
+
 deploy:
   provider: releases
   api_key:
@@ -18,6 +78,4 @@ deploy:
   file: target/release/beamium
   skip_cleanup: true
   on:
-    repo: ovh/beamium
-    branch: master
-    tags: true
+    repo: miton18/beamium
