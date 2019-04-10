@@ -65,7 +65,7 @@ Beamium can have none to many Prometheus or Warp10/Sensision endpoints. A *scrap
 scrapers:                              # Scrapers definitions (Optional)
   scraper1:                            # Source name                  (Required)
     url: http://127.0.0.1:9100/metrics # Prometheus endpoint          (Required)
-    period: 10000                      # Polling interval(ms)         (Required)
+    period: 60s                        # Polling interval             (Required)
     format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])
     labels:                            # Labels definitions           (Optional)
       label_name: label_value          # Label definition             (Required)
@@ -76,6 +76,7 @@ scrapers:                              # Scrapers definitions (Optional)
     headers:                           # Add custom header on request (Optional)
       X-Toto: tata                     # list of headers to add       (Optional)
       Authorization: Basic XXXXXXXX
+    pool: 1                            # Number of threads allocated for the scraper (Optionnal)
 ```
 
 #### Sinks
@@ -87,8 +88,8 @@ sinks: # Sinks definitions (Optional)
     token: mywarp10token               # Warp10 write token                       (Required)
     token-header: X-Custom-Token       # Warp10 token header name                 (Optional, default: X-Warp10-Token)
     selector: metrics.*                # Regex used to filter metrics             (Optional, default: None)
-    ttl: 3600                          # Discard file older than ttl (seconds)    (Optional, default: 3600)
-    size: 1073741824                   # Discard old file if sink size is greater (Optional, default: 1073741824)
+    ttl: 1h                            # Discard file older than ttl              (Optional, default: 3600)
+    size: 100Gb                        # Discard old file if sink size is greater (Optional, default: 1073741824)
     parallel: 1                        # Send parallelism                         (Optional, default: 1)
     keep-alive: 1                      # Use keep alive                           (Optional, default: 1)
 ```
@@ -103,22 +104,35 @@ labels: # Labels definitions (Optional)
 #### Parameters
 Beamium can be customized through parameters. See available parameters bellow:
 ``` yaml
-parameters: # Parameters definitions (Optional)
-  source-dir: sources   # Beamer data source directory                     (Optional, default: sources)
-  sink-dir: sinks       # Beamer data sink directory                       (Optional, default: sinks)
-  scan-period: 1000     # Delay(ms) between source/sink scan               (Optional, default: 1000)
-  batch-count: 250      # Maximum number of files to process in a batch    (Optional, default: 250)
-  batch-size: 200000    # Maximum batch size                               (Optional, default: 200000)
-  log-file: beamium.log # Log file                                         (Optional, default: beamium.log)
-  log-level: 4          # Log level                                        (Optional, default: info)
-  timeout: 500          # Http timeout (seconds)                           (Optional, default: 500)
-  router-parallel: 1    # Routing threads                                  (Optional, default: 1)
-  backoff:              # Backoff configuration - slow down push on errors (Optional)
-    initial: 500ms        # Initial interval                               (Optional, default: 500ms)
-    max: 1m               # Max interval                                   (Optional, default: 1m)
-    multiplier: 1.5       # Interval multiplier                            (Optional, default: 1.5)
-    randomization: 0.3    # Randomization factor - delay = interval * 0.3  (Optional, default: 0.3)
+parameters: # Parameters definitions                                                                  (Optional)
+  source-dir: sources     # Beamer data source directory                                                  (Optional, default: sources)
+  sink-dir: sinks         # Beamer data sink directory                                                    (Optional, default: sinks)
+  scan-period: 1s         # Delay(ms) between source/sink scan                                            (Optional, default: 1000)
+  batch-count: 250        # Maximum number of files to process in a batch                                 (Optional, default: 250)
+  batch-size: 2Kb         # Maximum batch size                                                            (Optional, default: 200000)
+  log-file: beamium.log   # Log file                                                                      (Optional, default: beamium.log)
+  log-level: 4            # Log level                                                                     (Optional, default: info)
+  timeout: 500            # Http timeout                                                                  (Optional, default: 500)
+  router-parallel: 1      # Routing threads                                                               (Optional, default: 1)
+  metrics: 127.0.0.1:9110 # Open a server on the given address and expose a prometheus /metrics endpoint  (Optional, default: none)
+  backoff:                # Backoff configuration - slow down push on errors                              (Optional)
+    initial: 500ms          # Initial interval                                                              (Optional, default: 500ms)
+    max: 1m                 # Max interval                                                                  (Optional, default: 1m)
+    multiplier: 1.5         # Interval multiplier                                                           (Optional, default: 1.5)
+    randomization: 0.3      # Randomization factor - delay = interval * 0.3                                 (Optional, default: 0.3)
 ```
+
+## Metrics
+Beamium now expose metrics about his usage:
+
+|name|labels|type|description|
+|---|---|---|---|
+|beamium_directory_files|directory|gauge|Number of files in the directory|
+|beamium_fetch_datapoints|scraper|counter|Number of datapoints fetched|
+|beamium_fetch_errors|scraper|counter|Number of fetch errors|
+|beamium_push_datapoints|sink|counter|Number of datapoints pushed|
+|beamium_push_http_status|sink, status|counter|Push response http status code|
+|beamium_push_errors|sink|counter|Number of push error|
 
 ## Contributing
 Instructions on how to contribute to Beamium are available on the [Contributing][Contributing] page.

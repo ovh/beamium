@@ -1,34 +1,43 @@
+//! # Build module
+//!
+//! The build module create rust files at build time
+//! in order to inject some source code.
 use std::env;
 use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
-use std::process::Command;
+use std::io::Write;
 
-fn main() {
-    let output = Command::new("git")
-        .arg("rev-parse")
-        .arg("HEAD")
-        .output()
-        .expect("failed to execute process");
+use failure::{Error, ResultExt};
+use git2::Repository;
+use time::now_utc;
 
-    let hash = String::from_utf8_lossy(&output.stdout);
-    let profile = env::var("PROFILE").expect("Expect to be built using cargo");
-    let mut content = format!("static COMMIT: &'static str = {:?};\n", hash.trim());
-    content += &format!("static PROFILE: &'static str = {:?};\n", profile);
+pub fn main() -> Result<(), Error> {
+    // Load the current git repository and retrieve the last commit using the
+    // HEAD current reference
+    let repository = Repository::discover(".").context("Expect to have a git repository")?;
+    let identifier = repository
+        .revparse_single("HEAD")
+        .context("Expect to have at least one commit")?
+        .id();
 
-    let path = Path::new("./src/version.rs");
+    // Retrieve the current time use UTC timezone
+    let now = now_utc();
+    let profile = env::var("PROFILE").context("Expect to be built using cargo")?;
 
-    if path.exists() {
-        let mut f = File::open(path).expect("fail to open result.rs");
-        let mut current = String::new();
-        f.read_to_string(&mut current)
-            .expect("fail to read result.rs");
+    // Generate the version file
+    let mut file = File::create("src/version.rs")?;
 
-        if current == content {
-            return;
-        }
-    };
+    file.write(
+        format!(
+            "pub(crate) const BUILD_DATE: &str = \"{}\";\n",
+            now.rfc3339()
+        )
+        .as_bytes(),
+    )?;
+    file.write(format!("pub(crate) const GITHASH: &str = \"{}\";\n", identifier).as_bytes())?;
+    file.write(format!("pub(crate) const PROFILE: &str = \"{}\";\n", profile).as_bytes())?;
 
-    let mut out = File::create(path).unwrap();
-    out.write(content.as_bytes()).unwrap();
+    file.flush()?;
+    file.sync_all()?;
+
+    Ok(())
 }

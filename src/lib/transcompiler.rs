@@ -1,25 +1,28 @@
 use std::error::Error;
-use time;
 
-use config;
+use time::now_utc;
 
-pub struct Transcompiler<'a> {
-    format: &'a config::ScraperFormat,
+use crate::conf::ScraperFormat;
+
+#[derive(Clone, Debug)]
+pub struct Transcompiler {
+    format: ScraperFormat,
     now: i64,
 }
 
-impl<'a> Transcompiler<'a> {
-    pub fn new(format: &config::ScraperFormat) -> Transcompiler {
-        let start = time::now_utc();
-        let now = start.to_timespec().sec * 1000 * 1000
-            + (i64::from(start.to_timespec().nsec) as i64 / 1000);
-        Transcompiler { format, now }
+impl Transcompiler {
+    pub fn new(format: ScraperFormat) -> Self {
+        let start = now_utc();
+        let now = start.to_timespec().sec * 1_000_000
+            + (i64::from(start.to_timespec().nsec) as i64 / 1_000);
+
+        Self { format, now }
     }
 
     pub fn format(&self, line: &str) -> Result<String, Box<Error>> {
-        match *self.format {
-            config::ScraperFormat::Sensision => format_warp10(line),
-            config::ScraperFormat::Prometheus => format_prometheus(line, self.now),
+        match self.format {
+            ScraperFormat::Sensision => format_warp10(line),
+            ScraperFormat::Prometheus => format_prometheus(line, self.now),
         }
     }
 }
@@ -40,32 +43,35 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
 
     // Extract Prometheus metric
     let index = if line.contains('{') {
-        line.rfind('}').ok_or("bad class")?
+        line.rfind('}').ok_or_else(|| "bad class")?
     } else {
-        line.find(' ').ok_or("bad class")?
+        line.find(' ').ok_or_else(|| "bad class")?
     };
     let (class, v) = line.split_at(index + 1);
     let mut tokens = v.split_whitespace();
 
-    let value = tokens.next().ok_or("no value")?;
+    let value = tokens.next().ok_or_else(|| "no value")?;
 
     // Prometheus value can be '-Inf', '+Inf', 'nan', 'NaN' skipping if so
     if value == "+Inf" || value == "-Inf" || value == "nan" || value == "NaN" {
         return Ok(String::new());
     }
 
-    let timestamp = tokens
-        .next()
-        .map(|v| i64::from_str_radix(v, 10).map(|v| v * 1000).unwrap_or(now))
-        .unwrap_or(now);
+    let timestamp = tokens.next().map_or(now, |v| {
+        i64::from_str_radix(v, 10)
+            .map(|v| v * 1000)
+            .unwrap_or_else(|_| now)
+    });
 
     // Format class
     let mut parts = class.splitn(2, '{');
-    let class = String::from(parts.next().ok_or("no_class")?);
+    let class = String::from(parts.next().ok_or_else(|| "no_class")?);
     let class = class.trim();
     let plabels = parts.next();
     let slabels = if plabels.is_some() {
-        let mut labels = plabels.unwrap().split("\",")
+        let mut labels = plabels
+            .unwrap()
+            .split("\",")
             .map(|v| v.replace("=", "%3D")) // escape
             .map(|v| v.replace("%3D\"", "=")) // remove left double quote
             .map(|v| v.replace("\"}", "")) // remove right double quote
@@ -77,7 +83,7 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
             .fold(String::new(), |acc, x| {
                 // skip invalid values
                 if !x.contains('=') {
-                    return acc
+                    return acc;
                 }
                 acc + &x + ","
             });
@@ -125,5 +131,4 @@ mod tests {
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
     }
-
 }
