@@ -1,178 +1,302 @@
 //! # Beamium.
 //!
 //! Beamium scrap Prometheus endpoint and forward metrics to Warp10.
-extern crate backoff;
-extern crate bytes;
-extern crate cast;
-extern crate clap;
-extern crate core;
-extern crate ctrlc;
-extern crate flate2;
-extern crate futures;
-extern crate humantime;
-extern crate hyper;
-extern crate hyper_timeout;
-extern crate hyper_tls;
-extern crate nix;
-extern crate regex;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate prometheus;
 #[macro_use]
 extern crate slog;
-extern crate slog_async;
 #[macro_use]
 extern crate slog_scope;
-extern crate slog_stream;
-extern crate slog_syslog;
-extern crate slog_term;
-extern crate time;
-extern crate tokio_core;
-extern crate tokio_timer;
-extern crate yaml_rust;
 
-use clap::App;
-use std::fs;
+use std::fs::create_dir_all;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
+use std::thread::sleep;
+use std::convert::TryFrom;
 
-mod config;
-mod lib;
-mod log;
-mod router;
-mod scraper;
-mod sink;
+use ctrlc;
+use failure::{format_err, Error};
+use prometheus::{gather, Encoder, TextEncoder};
+use structopt::StructOpt;
+use tokio::prelude::*;
+use tokio::runtime::Builder;
+use warp::{path, serve, Filter};
 
-include!("version.rs");
+use crate::conf::Conf;
+use crate::constants::{KEEP_ALIVE_TOKIO_RUNTIME, MAX_HANDLERS_PER_REACTOR, THREAD_SLEEP};
+use crate::lib::{Named, Runner};
+use crate::router::Router;
+use crate::scraper::Scraper;
+use crate::sink::Sink;
+use crate::version::{BUILD_DATE, GITHASH, PROFILE};
 
-/// Main loop.
-fn main() {
-    // Setup a bare logger
-    log::bootstrap();
+pub(crate) mod conf;
+#[macro_use]
+pub(crate) mod lib;
+pub(crate) mod constants;
+pub(crate) mod log;
+pub(crate) mod router;
+pub(crate) mod scraper;
+pub(crate) mod sink;
+pub(crate) mod version;
 
-    let matches = App::new("beamium")
-        .version(&*format!(
-            "{} ({}#{})",
+#[derive(StructOpt, Clone, Debug)]
+struct Opts {
+    /// Prints version information
+    #[structopt(short = "V", long = "version")]
+    version: bool,
+
+    /// Increase verbosity level (console only)
+    #[structopt(short = "v", parse(from_occurrences))]
+    verbose: usize,
+
+    /// Sets a custom config file
+    #[structopt(short = "c", long = "config", parse(from_os_str))]
+    config: Option<PathBuf>,
+
+    /// Test configuration
+    #[structopt(short = "t", long = "check")]
+    check: bool,
+}
+
+fn main() -> Result<(), Error> {
+    // Parse command line interface in order to retrieve flags
+    let opts = Opts::from_args();
+    let _guard = log::bootstrap();
+
+    // Display version
+    if opts.version {
+        let mut version = String::new();
+
+        version += &format!(
+            "{} version {} {}\n",
+            env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
-            COMMIT,
-            PROFILE,
-        ))
-        .author("d33d33 <kevin@d33d33.fr>")
-        .about("Send Prometheus metrics to Warp10")
-        .args_from_usage(
-            "-c, --config=[FILE] 'Sets a custom config file'
-                              \
-                          -v...                'Increase verbosity level (console only)'
-                          -t                   'Test config'",
-        )
-        .get_matches();
+            GITHASH
+        );
+        version += &format!("{} build date {}\n", env!("CARGO_PKG_NAME"), BUILD_DATE);
+        version += &format!("{} profile {}\n", env!("CARGO_PKG_NAME"), PROFILE);
 
-    // Bootstrap config
-    let config_path = matches.value_of("config").unwrap_or("");
-    let config = match config::load_config(&config_path) {
-        Ok(config) => config,
+        println!("{}", version);
+        return Ok(());
+    }
+
+    // Retrieve configuration
+    let result = match opts.config {
+        Some(ref path) => Conf::try_from(path),
+        None => Conf::default(),
+    };
+
+    let conf = match result {
+        Ok(conf) => conf,
         Err(err) => {
-            crit!("Fail to load config {}: {}", &config_path, err);
-            std::process::abort();
+            crit!("configuration is not healthy"; "error" => err.to_string());
+            return Err(format_err!("{}", err));
         }
     };
 
-    if matches.is_present("t") {
-        info!("config ok");
-        std::process::exit(0);
+    // Quit if it is only for check configuration
+    if opts.check {
+        // 0  is info level
+        // 1  is debug level
+        // 2+ is trace level
+        if opts.verbose >= 1 {
+            debug!("{:#?}", conf);
+        }
+
+        info!("configuration is healthy");
+        return Ok(());
     }
 
-    info!("starting");
-
-    // Setup logging
-    match log::log(&config.parameters, matches.occurrences_of("v")) {
-        Ok(()) => {}
-        Err(err) => {
-            crit!("Log setup failure: {}", err);
-            std::process::abort();
-        }
+    if PROFILE != "release" {
+        warn!(
+            "{} is running in '{}' mode",
+            env!("CARGO_PKG_NAME"),
+            PROFILE
+        );
     }
 
-    // Ensure dirs
-    match fs::create_dir_all(&config.parameters.source_dir) {
-        Ok(()) => {}
+    // Initialize full featured logger and keep a reference of the guard
+    let _guard = match log::initialize(opts.verbose, &conf.parameters) {
+        Ok(guard) => guard,
         Err(err) => {
-            crit!(
-                "Fail to create source directory {}: {}",
-                &config.parameters.source_dir,
-                err
-            );
-            std::process::abort();
-        }
-    };
-    match fs::create_dir_all(&config.parameters.sink_dir) {
-        Ok(()) => {}
-        Err(err) => {
-            crit!(
-                "Fail to create sink directory {}: {}",
-                &config.parameters.source_dir,
-                err
-            );
-            std::process::abort();
+            crit!("could not instantiate full featured logger"; "error" => err.to_string());
+            return Err(format_err!("{}", err));
         }
     };
 
-    // Synchronisation stuff
-    let sigint = Arc::new(AtomicBool::new(false));
-    let mut handles = Vec::with_capacity(config.scrapers.len());
-
-    // Sigint handling
-    let r = sigint.clone();
-    ctrlc::set_handler(move || {
-        r.store(true, Ordering::SeqCst);
-    }).expect("Error setting sigint handler");
-
-    // Spawn scrapers
-    info!("spawning scrapers");
-    for scraper in config.scrapers.clone() {
-        let (parameters, sigint) = (config.parameters.clone(), sigint.clone());
-        handles.push(thread::spawn(move || {
-            slog_scope::scope(
-                &slog_scope::logger().new(o!("scraper" => scraper.name.clone())),
-                || scraper::scraper(&scraper, &parameters, &sigint),
-            );
-        }));
+    // Ensure that directories are presents
+    if let Err(err) = create_dir_all(conf.parameters.source_dir.to_owned()) {
+        crit!("could not create source directory"; "error" => err.to_string());
+        return Err(format_err!("{}", err));
     }
 
-    // Spawn router
-    info!("spawning router");
-    let mut router = router::Router::new(&config.sinks, &config.parameters, &config.labels);
-    router.start();
+    if let Err(err) = create_dir_all(conf.parameters.sink_dir.to_owned()) {
+        crit!("could not create sink directory"; "error" => err.to_string());
+        return Err(format_err!("{}", err));
+    }
 
-    // Spawn sinks
-    info!("spawning sinks");
-    let mut sinks: Vec<sink::Sink> = config
-        .sinks
-        .iter()
-        .map(|sink| sink::Sink::new(&sink, &config.parameters))
-        .collect();
+    // Manage termination signals from the system
+    let sigint = arc!(AtomicBool::new(true));
+    let tx = sigint.to_owned();
+    let result = ctrlc::set_handler(move || {
+        tx.store(false, Ordering::SeqCst);
+    });
 
-    sinks.iter_mut().for_each(|s| s.start());
+    if let Err(err) = result {
+        crit!("could not set handler on signal int"; "error" => err.to_string());
+        return Err(format_err!("{}", err));
+    }
 
-    info!("started");
+    // Create metrics http server
+    let mut metrics_rt = None;
 
-    // Wait for sigint
-    loop {
-        thread::sleep(Duration::from_millis(10));
+    if let Some(addr) = conf.parameters.metrics {
+        let mut rt = Builder::new()
+            .keep_alive(Some(KEEP_ALIVE_TOKIO_RUNTIME))
+            .core_threads(1)
+            .name_prefix("metrics-")
+            .build()?;
 
-        if sigint.load(Ordering::Relaxed) {
-            break;
+        let router = path!("metrics").map(|| {
+            let encoder = TextEncoder::new();
+            let metric_families = gather();
+
+            let mut buffer = vec![];
+            if let Err(err) = encoder.encode(&metric_families, &mut buffer) {
+                error!("could not encode prometheus metrics"; "error" => err.to_string());
+            }
+
+            buffer
+        });
+
+        info!("start metrics http server"; "uri" => format!("http://{}/metrics", addr));
+        rt.spawn(serve(router).bind(addr));
+        metrics_rt = Some(rt);
+    }
+
+    // Create scrapers and associated runtimes
+    let mut scrapers = vec![];
+    for scraper in conf.scrapers.to_owned() {
+        debug!("create scraper and associated runtime"; "scraper" => scraper.name.as_str());
+        let result = Builder::new()
+            .keep_alive(Some(KEEP_ALIVE_TOKIO_RUNTIME))
+            .core_threads(scraper.pool + 1)
+            .name_prefix(format!("{}-", scraper.name.as_str()))
+            .build();
+
+        let scraper = Scraper::from((scraper.to_owned(), conf.parameters.to_owned()));
+        let mut rt = match result {
+            Ok(rt) => rt,
+            Err(err) => {
+                crit!("could not build the runtime for scraper";  "scraper" => scraper.name(), "error" => err.to_string());
+                return Err(format_err!("{}", err));
+            }
+        };
+
+        if let Err(err) = scraper.start(&mut rt) {
+            crit!("could not start scraper"; "scraper" => scraper.name(), "error" => err.to_string());
+            return Err(format_err!("{}", err));
+        }
+
+        scrapers.push((scraper, rt));
+    }
+
+    // Create router and associated runtime
+    let result = Builder::new()
+        .keep_alive(Some(KEEP_ALIVE_TOKIO_RUNTIME))
+        .core_threads(conf.parameters.router_parallel)
+        .name_prefix("router-")
+        .build();
+
+    let mut rt = match result {
+        Ok(rt) => rt,
+        Err(err) => {
+            crit!("could not build the runtime for router"; "error" => err.to_string());
+            return Err(format_err!("{}", err));
+        }
+    };
+
+    let router = Router::from((
+        conf.parameters.to_owned(),
+        conf.labels,
+        conf.sinks.to_owned(),
+    ));
+
+    if let Err(err) = router.start(&mut rt) {
+        crit!("could not start the router"; "error" => err.to_string());
+        return Err(format_err!("{}", err));
+    }
+
+    let router = (router, rt);
+
+    // Create sinks and associated runtimes
+    let mut sinks = vec![];
+    for sink in conf.sinks {
+        debug!("create sink and associated runtime"; "sink" => sink.name.to_owned());
+        let result = Builder::new()
+            .keep_alive(Some(KEEP_ALIVE_TOKIO_RUNTIME))
+            .core_threads(
+                (sink.parallel as f64 / MAX_HANDLERS_PER_REACTOR as f64).ceil() as usize + 1,
+            )
+            .name_prefix(format!("{}-", sink.name))
+            .build();
+
+        let sink = Sink::from((sink.to_owned(), conf.parameters.to_owned()));
+        let mut rt = match result {
+            Ok(rt) => rt,
+            Err(err) => {
+                crit!("could not build the runtime for sink";  "sink" => sink.name(), "error" => err.to_string());
+                return Err(format_err!("{}", err));
+            }
+        };
+
+        if let Err(err) = sink.start(&mut rt) {
+            crit!("could not start sink"; "sink" => sink.name(), "error" => err.to_string());
+            return Err(format_err!("{}", err));
+        }
+
+        sinks.push((sink, rt));
+    }
+
+    // Wait for termination signals
+    let rx = sigint.to_owned();
+    while rx.load(Ordering::SeqCst) {
+        sleep(THREAD_SLEEP);
+    }
+
+    // Shutdown runtime for each scrapers
+    for (scraper, rt) in scrapers {
+        debug!("shutdown scraper's runtime"; "scraper" => scraper.name());
+        if rt.shutdown_now().wait().is_err() {
+            error!("could not shutdown the runtime"; "scraper" => scraper.name());
         }
     }
 
-    info!("shutting down");
-    for handle in handles {
-        handle.join().unwrap();
+    // Shutdown router runtime
+    debug!("shutdown router's runtime");
+    if router.1.shutdown_now().wait().is_err() {
+        error!("could not shutdown the router's runtime");
     }
 
-    router.stop();
-
-    for s in sinks {
-        s.stop();
+    // Shutdown runtime for each sinks
+    for (sink, rt) in sinks {
+        debug!("shutdown sink's runtime"; "sink" => sink.name());
+        if rt.shutdown_now().wait().is_err() {
+            error!("could not shutdown the runtime"; "sink" => sink.name());
+        }
     }
-    info!("halted");
+
+    // Shutdown the metrics server
+    if let Some(rt) = metrics_rt {
+        debug!("shutdown metrics server's runtime");
+        if rt.shutdown_now().wait().is_err() {
+            error!("could not shutdown the metrics server");
+        }
+    }
+
+    info!("Beamium halted!");
+    Ok(())
 }
