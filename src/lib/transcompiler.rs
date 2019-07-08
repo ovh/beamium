@@ -1,6 +1,6 @@
-use std::error::Error;
-
 use time::now_utc;
+
+use std::error::Error;
 
 use crate::conf::ScraperFormat;
 
@@ -36,8 +36,8 @@ fn format_warp10(line: &str) -> Result<String, Box<Error>> {
 fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
     let line = line.trim();
 
-    // Skip comments
-    if line.starts_with('#') {
+    // Skip comments or empty line
+    if line.starts_with('#') || line.is_empty() {
         return Ok(String::new());
     }
 
@@ -111,6 +111,24 @@ mod tests {
         assert_eq!(expected.unwrap(), result.unwrap());
 
         let line = "f{job_id=\"123\"} -Inf";
+        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+    }
+
+    #[test]
+    fn prometheus_skip_empty() {
+        let line = "";
+        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+    }
+
+    #[test]
+    fn prometheus_skip_comment() {
+        let line = "# HELP ...";
         let expected: Result<String, Box<Error>> = Ok(String::new());
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
