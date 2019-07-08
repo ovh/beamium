@@ -305,9 +305,11 @@ impl TryFrom<(String, RawSink)> for Sink {
 
         let selector = match raw_sink.selector {
             None => None,
-            Some(ref pattern) => Some(Regex::new(pattern).with_context(|err| {
-                format!("could not create regex from 'selector' field, {}", err)
-            })?),
+            Some(ref pattern) => {
+                Some(Regex::new(&format!("^{}", pattern)).with_context(|err| {
+                    format!("could not create regex from 'selector' field, {}", err)
+                })?)
+            }
         };
 
         let keep_alive_timeout = match raw_sink.keep_alive_timeout {
