@@ -118,7 +118,9 @@ impl Router {
         let labels = labels.join(",");
         let mut body = vec![];
         for line in lines {
-            body.push(try_future!(add_labels(&line, &labels)))
+            if !line.is_empty() {
+                body.push(try_future!(add_labels(&line, &labels)))
+            }
         }
 
         ok(body)
