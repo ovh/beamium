@@ -1,12 +1,46 @@
-scrapers:
-  source1:
-    url: http://127.0.0.1:9100/metrics
-    period: 10000
+scrapers:                              # Scrapers definitions (Optional)
+  scraper1:                            # Source name                  (Required)
+    url: http://127.0.0.1:9100/metrics # Prometheus endpoint          (Required)
+    period: 60s                        # Polling interval             (Required)
+    format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])
+    labels:                            # Labels definitions           (Optional)
+      label_name: label_value          # Label definition             (Required)
+    filtered_labels:                   # filtered labels              (optional)
+      - jobid                          # key label which is removed   (required)
+    metrics:                           # filter fetched metrics       (optional)
+      - node.*                         # regex used to select metrics (required)
+    headers:                           # Add custom header on request (Optional)
+      X-Toto: tata                     # list of headers to add       (Optional)
+      Authorization: Basic XXXXXXXX
+    pool: 1                            # Number of threads allocated for the scraper (Optionnal)
 
-sinks:
-  sink1:
-    url: WARP10_ENDPOINT
-    token: WARP10_TOKEN
+sinks:                                 # Sinks definitions (Optional)
+  source1:                             # Sink name                                (Required)
+    url: WARP10_ENDPOINT               # Warp10 endpoint                          (Required)
+    token: WARP10_TOKEN                # Warp10 write token                       (Required)
+    token-header: X-Custom-Token       # Warp10 token header name                 (Optional, default: X-Warp10-Token)
+    selector: metrics.*                # Regex used to filter metrics             (Optional, default: None)
+    ttl: 1h                            # Discard file older than ttl              (Optional, default: 3600)
+    size: 100Gb                        # Discard old file if sink size is greater (Optional, default: 1073741824)
+    parallel: 1                        # Send parallelism                         (Optional, default: 1)
+    keep-alive: 1                      # Use keep alive                           (Optional, default: 1)
 
-labels:
-  host: tmp
+labels:                   # Labels definitions (Optional)
+  label_name: label_value # Label definition   (Required)
+
+parameters:               # Parameters definitions                                                                  (Optional)
+  source-dir: sources     # Beamer data source directory                                                  (Optional, default: sources)
+  sink-dir: sinks         # Beamer data sink directory                                                    (Optional, default: sinks)
+  scan-period: 1s         # Delay(ms) between source/sink scan                                            (Optional, default: 1000)
+  batch-count: 250        # Maximum number of files to process in a batch                                 (Optional, default: 250)
+  batch-size: 2Kb         # Maximum batch size                                                            (Optional, default: 200000)
+  log-file: beamium.log   # Log file                                                                      (Optional, default: beamium.log)
+  log-level: 4            # Log level                                                                     (Optional, default: info)
+  timeout: 500            # Http timeout                                                                  (Optional, default: 500)
+  router-parallel: 1      # Routing threads                                                               (Optional, default: 1)
+  metrics: 127.0.0.1:9110 # Open a server on the given address and expose a prometheus /metrics endpoint  (Optional, default: none)
+  backoff:                # Backoff configuration - slow down push on errors                              (Optional)
+    initial: 500ms          # Initial interval                                                              (Optional, default: 500ms)
+    max: 1m                 # Max interval                                                                  (Optional, default: 1m)
+    multiplier: 1.5         # Interval multiplier                                                           (Optional, default: 1.5)
+    randomization: 0.3      # Randomization factor - delay = interval * 0.3                                 (Optional, default: 0.3)
