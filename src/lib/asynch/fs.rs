@@ -126,13 +126,13 @@ impl Scanner {
                 }
 
                 join_all(bulk).and_then(|entries| {
-                    ok(entries
-                        .iter()
-                        .filter_map(ToOwned::to_owned)
-                        .fold(HashMap::new(), |mut acc, (path, meta)| {
+                    ok(entries.iter().filter_map(ToOwned::to_owned).fold(
+                        HashMap::new(),
+                        |mut acc, (path, meta)| {
                             acc.insert(path, meta);
                             acc
-                        }))
+                        },
+                    ))
                 })
             })
     }

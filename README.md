@@ -115,6 +115,7 @@ parameters: # Parameters definitions                                            
   timeout: 500            # Http timeout                                                                  (Optional, default: 500)
   router-parallel: 1      # Routing threads                                                               (Optional, default: 1)
   metrics: 127.0.0.1:9110 # Open a server on the given address and expose a prometheus /metrics endpoint  (Optional, default: none)
+  filesystem-threads: 1     # Set the number of threads use for blocking treatment per scraper, sink and router (Optional, default: 1)
   backoff:                # Backoff configuration - slow down push on errors                              (Optional)
     initial: 500ms          # Initial interval                                                              (Optional, default: 500ms)
     max: 1m                 # Max interval                                                                  (Optional, default: 1m)
@@ -125,14 +126,14 @@ parameters: # Parameters definitions                                            
 ## Metrics
 Beamium now expose metrics about his usage:
 
-|name|labels|type|description|
-|---|---|---|---|
-|beamium_directory_files|directory|gauge|Number of files in the directory|
-|beamium_fetch_datapoints|scraper|counter|Number of datapoints fetched|
-|beamium_fetch_errors|scraper|counter|Number of fetch errors|
-|beamium_push_datapoints|sink|counter|Number of datapoints pushed|
-|beamium_push_http_status|sink, status|counter|Push response http status code|
-|beamium_push_errors|sink|counter|Number of push error|
+| name                     | labels       | type    | description                      |
+| ------------------------ | ------------ | ------- | -------------------------------- |
+| beamium_directory_files  | directory    | gauge   | Number of files in the directory |
+| beamium_fetch_datapoints | scraper      | counter | Number of datapoints fetched     |
+| beamium_fetch_errors     | scraper      | counter | Number of fetch errors           |
+| beamium_push_datapoints  | sink         | counter | Number of datapoints pushed      |
+| beamium_push_http_status | sink, status | counter | Push response http status code   |
+| beamium_push_errors      | sink         | counter | Number of push error             |
 
 ## Contributing
 Instructions on how to contribute to Beamium are available on the [Contributing][Contributing] page.

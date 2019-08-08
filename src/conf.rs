@@ -3,19 +3,20 @@
 //! The Conf module provides the beamium configuration.
 //! It set defaults and then load config from '/etc', local dir and provided path.
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::convert::TryFrom;
 use std::time::Duration;
 
 use config::{Config, File};
 use failure::{format_err, Error, ResultExt};
-use glob::glob;
 use humanize_rs::bytes::{Bytes, Unit};
 use humanize_rs::duration::parse;
 use hyper::Uri;
 use regex::{Regex, RegexSet};
 use serde_derive::{Deserialize, Serialize};
+
+use glob::glob;
 
 /// `Scraper` config.
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -80,6 +81,8 @@ pub(crate) struct RawParameters {
     pub router_parallel: usize,
     pub backoff: RawBackoff,
     pub metrics: Option<String>,
+    #[serde(rename = "filesystem-threads")]
+    pub filesystem_threads: usize,
 }
 
 /// `RawConfig` root.
@@ -123,6 +126,7 @@ impl RawConf {
         config.set_default("parameters.syslog", false)?;
         config.set_default("parameters.timeout", "500s")?;
         config.set_default("parameters.router-parallel", 1)?;
+        config.set_default("parameters.blocking-threads", 1)?;
 
         // backoff parameters
         config.set_default("parameters.backoff.initial", "500ms")?;
@@ -341,7 +345,7 @@ impl TryFrom<(String, RawSink)> for Sink {
         };
 
         let size = match size.parse::<u64>() {
-            Ok(size) => Bytes::new(size, Unit::Byte)?.size() as u64 / 10,
+            Ok(size) => Bytes::new(size, Unit::Byte)?.size() as u64,
             Err(_) => size
                 .parse::<Bytes>()
                 .with_context(|err| format!("could not parse 'size' setting, {}", err))?
@@ -416,6 +420,7 @@ pub struct Parameters {
     pub router_parallel: usize,
     pub backoff: Backoff,
     pub metrics: Option<SocketAddr>,
+    pub filesystem_threads: usize,
 }
 
 impl TryFrom<RawParameters> for Parameters {
@@ -465,6 +470,7 @@ impl TryFrom<RawParameters> for Parameters {
             router_parallel: raw_parameters.router_parallel,
             backoff: Backoff::try_from(&raw_parameters.backoff)?,
             metrics,
+            filesystem_threads: raw_parameters.filesystem_threads,
         })
     }
 }

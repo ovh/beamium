@@ -151,7 +151,9 @@ mod tests {
     fn add_one_label() {
         let line = "1562656816000000// f{type=count} 1486";
         let label = "host=foo";
-        let expected: Result<String, Error> = Ok(String::from("1562656816000000// f{host=foo,type=count} 1486"));
+        let expected: Result<String, Error> = Ok(String::from(
+            "1562656816000000// f{host=foo,type=count} 1486",
+        ));
         let result = super::add_labels(line, label);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
@@ -161,7 +163,9 @@ mod tests {
     fn add_multiple_labels() {
         let line = "1562656816000000// f{type=count} 1486";
         let label = "host=foo,rack=toto";
-        let expected: Result<String, Error> = Ok(String::from("1562656816000000// f{host=foo,rack=toto,type=count} 1486"));
+        let expected: Result<String, Error> = Ok(String::from(
+            "1562656816000000// f{host=foo,rack=toto,type=count} 1486",
+        ));
         let result = super::add_labels(line, label);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
