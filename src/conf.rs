@@ -126,7 +126,7 @@ impl RawConf {
         config.set_default("parameters.syslog", false)?;
         config.set_default("parameters.timeout", "500s")?;
         config.set_default("parameters.router-parallel", 1)?;
-        config.set_default("parameters.blocking-threads", 1)?;
+        config.set_default("parameters.filesystem-threads", 1)?;
 
         // backoff parameters
         config.set_default("parameters.backoff.initial", "500ms")?;
