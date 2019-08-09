@@ -56,6 +56,16 @@ If you have already rust:
 ## Configuration
 Beamium come with a [sample config file](config.sample.yaml). Simply copy the sample to *config.yaml*, replace `WARP10_ENDPOINT` and `WARP10_TOKEN`, launch Beamiun and you are ready to go!
 
+Since the release 2.x, Beamium will look for configuration in those directories/files:
+- /etc/beamium.d/
+- /etc/beamium/config.yaml
+- $HOME/beamium.d/
+- $HOME/beamium/config.yaml
+
+In addition, it will recursively discover configuration files in `beamium.d` directories. Then it will merge all discovered configuration files.
+
+Furthermore, Beamium support multiple formats for configuration files which are `hjson`, `json`, `toml`, `yaml`, `yml` or `ini`.
+
 ### Definitions
 Config is composed of four parts:
 
@@ -122,6 +132,22 @@ parameters: # Parameters definitions                                            
     multiplier: 1.5         # Interval multiplier                                                           (Optional, default: 1.5)
     randomization: 0.3      # Randomization factor - delay = interval * 0.3                                 (Optional, default: 0.3)
 ```
+
+#### Test
+In order to know if the configuration is healthy, you can use the following command:
+```bash
+$ beamium -t [--config </path/to/file>]
+```
+
+This will output if the configuration is healthy.
+
+To print the configuration you can use the `-v` flag.
+
+```bash
+$ beamium -t -vvvvv [--config </path/to/file>]
+```
+
+This will output if the configuration is healthy and the configuration loaded.
 
 ## Metrics
 Beamium now expose metrics about his usage:
