@@ -10,19 +10,19 @@ extern crate slog;
 #[macro_use]
 extern crate slog_scope;
 
+use std::convert::TryFrom;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
-use std::convert::TryFrom;
 
 use ctrlc;
-use failure::{format_err, Error};
-use prometheus::{gather, Encoder, TextEncoder};
+use failure::{Error, format_err};
+use prometheus::{Encoder, gather, TextEncoder};
 use structopt::StructOpt;
 use tokio::prelude::*;
 use tokio::runtime::Builder;
-use warp::{path, serve, Filter};
+use warp::{Filter, path, serve};
 
 use crate::conf::Conf;
 use crate::constants::{KEEP_ALIVE_TOKIO_RUNTIME, MAX_HANDLERS_PER_REACTOR, THREAD_SLEEP};
@@ -157,6 +157,7 @@ fn main() -> Result<(), Error> {
         let mut rt = Builder::new()
             .keep_alive(Some(KEEP_ALIVE_TOKIO_RUNTIME))
             .core_threads(1)
+            .blocking_threads(1)
             .name_prefix("metrics-")
             .build()?;
 
@@ -184,6 +185,7 @@ fn main() -> Result<(), Error> {
         let result = Builder::new()
             .keep_alive(Some(KEEP_ALIVE_TOKIO_RUNTIME))
             .core_threads(scraper.pool + 1)
+            .blocking_threads(conf.parameters.filesystem_threads)
             .name_prefix(format!("{}-", scraper.name.as_str()))
             .build();
 
@@ -208,6 +210,7 @@ fn main() -> Result<(), Error> {
     let result = Builder::new()
         .keep_alive(Some(KEEP_ALIVE_TOKIO_RUNTIME))
         .core_threads(conf.parameters.router_parallel)
+        .blocking_threads(conf.parameters.filesystem_threads)
         .name_prefix("router-")
         .build();
 
@@ -241,6 +244,7 @@ fn main() -> Result<(), Error> {
             .core_threads(
                 (sink.parallel as f64 / MAX_HANDLERS_PER_REACTOR as f64).ceil() as usize + 1,
             )
+            .blocking_threads(conf.parameters.filesystem_threads)
             .name_prefix(format!("{}-", sink.name))
             .build();
 

@@ -8,16 +8,16 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-use failure::{format_err, Error};
+use failure::{Error, format_err};
 use futures::future::ok;
+use tokio::fs::{File, rename};
 use tokio::fs::remove_file;
-use tokio::fs::{rename, File};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 
 use crate::conf;
-use crate::lib::asynch::fs::Scanner;
 use crate::lib::{add_labels, Runner};
+use crate::lib::asynch::fs::Scanner;
 
 #[derive(Clone, Debug)]
 pub struct Router {
@@ -52,7 +52,6 @@ impl Runner for Router {
 
         let scanner = Scanner::from((dir, self.params.scan_period.to_owned()))
             .fold(HashSet::new(), move |acc, entries| {
-                let mut tasks = vec![];
                 let paths: HashSet<PathBuf> =
                     entries.iter().fold(HashSet::new(), |mut acc, (path, _)| {
                         acc.insert(path.to_owned());
@@ -64,18 +63,18 @@ impl Runner for Router {
                     let labels = labels.to_owned();
                     let sinks = sinks.to_owned();
                     let params = params.to_owned();
+                    let epath = path.to_owned();
 
-                    tasks.push(
+                    executor.spawn(
                         Self::load(path.to_owned())
                             .and_then(move |lines| Self::process(&lines, &labels))
                             .and_then(move |lines| Self::write(&lines, &params, &sinks))
-                            .and_then(move |_| Self::remove(path)),
+                            .and_then(move |_| Self::remove(path))
+                            .map_err(move |err| {
+                                error!("could not process file in router"; "path" => epath.to_str(), "error" => err.to_string());
+                            }),
                     );
                 }
-
-                executor.spawn(future::join_all(tasks).and_then(|_| ok(())).map_err(|err| {
-                    error!("could not process files in router"; "error" => err.to_string());
-                }));
 
                 ok::<_, Error>(paths)
             })
@@ -94,7 +93,7 @@ impl Runner for Router {
 }
 
 impl Router {
-    fn load(path: PathBuf) -> impl Future<Item = Vec<String>, Error = Error> {
+    fn load(path: PathBuf) -> impl Future<Item=Vec<String>, Error=Error> {
         trace!("open file"; "path" => path.to_str());
         File::open(path)
             .map_err(|err| format_err!("{}", err))
@@ -108,7 +107,7 @@ impl Router {
     fn process(
         lines: &[String],
         labels: &Arc<HashMap<String, String>>,
-    ) -> impl Future<Item = Vec<String>, Error = Error> {
+    ) -> impl Future<Item=Vec<String>, Error=Error> {
         let labels: Vec<String> = labels
             .to_owned()
             .iter()
@@ -130,7 +129,7 @@ impl Router {
         lines: &[String],
         params: &conf::Parameters,
         sinks: &[conf::Sink],
-    ) -> impl Future<Item = (), Error = Error> {
+    ) -> impl Future<Item=(), Error=Error> {
         let mut bulk = vec![];
 
         let start = time::now_utc().to_timespec();
@@ -187,7 +186,7 @@ impl Router {
         future::join_all(bulk).and_then(|_| ok(()))
     }
 
-    fn remove(path: PathBuf) -> impl Future<Item = (), Error = Error> {
+    fn remove(path: PathBuf) -> impl Future<Item=(), Error=Error> {
         trace!("remove file"; "path" => path.to_str());
         remove_file(path.to_owned())
             .map_err(|err| format_err!("{}", err))
