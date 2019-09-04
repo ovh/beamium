@@ -61,9 +61,8 @@ struct Opts {
     check: bool,
 }
 
-fn main() -> Result<(), Error> {
-    // Parse command line interface in order to retrieve flags
-    let opts = Opts::from_args();
+#[paw::main]
+fn main(opts: Opts) -> Result<(), Error> {
     let _guard = log::bootstrap();
 
     // Display version
