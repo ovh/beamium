@@ -5,9 +5,9 @@ use std::fs::Metadata;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use failure::{format_err, Error};
+use failure::{Error, format_err};
+use futures::{Async, Future, Poll, Stream, try_ready};
 use futures::future::{err, join_all, ok};
-use futures::{try_ready, Async, Future, Poll, Stream};
 use prometheus::GaugeVec;
 use tokio::fs::{metadata, read_dir, remove_file};
 use tokio::timer::Interval;
@@ -72,7 +72,7 @@ impl Stream for Scanner {
 }
 
 impl Scanner {
-    fn scan(path: PathBuf) -> impl Future<Item = HashMap<PathBuf, Metadata>, Error = Error> {
+    fn scan(path: PathBuf) -> impl Future<Item=HashMap<PathBuf, Metadata>, Error=Error> {
         read_dir(path)
             .map_err(|err| format_err!("{}", err))
             .and_then(move |entries| {
@@ -99,9 +99,11 @@ impl Scanner {
                     let entry = entry.to_owned();
 
                     bulk.push(
+                        // In some cases, metadata failed to retrieve the meta of the file.
+                        // This occurred when a file is deleted by a sink.
                         metadata(entry.to_owned())
-                            .and_then(move |meta| ok((entry, meta)))
-                            .map_err(|err| format_err!("{}", err)),
+                            .and_then(move |meta| ok(Some((entry, meta))))
+                            .or_else(|_| ok(None)),
                     );
                 }
 
@@ -110,7 +112,11 @@ impl Scanner {
             .and_then(|tuples| {
                 let mut bulk = vec![];
                 for tuple in tuples {
-                    let (entry, meta) = tuple.to_owned();
+                    let (entry, meta) = match tuple.to_owned() {
+                        Some(tuple) => tuple,
+                        None => continue,
+                    };
+
                     let fut = if meta.len() > 0 {
                         ok(Some((entry, meta)))
                     } else {
