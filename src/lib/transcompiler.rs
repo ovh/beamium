@@ -19,7 +19,7 @@ impl Transcompiler {
         Self { format, now }
     }
 
-    pub fn format(&self, line: &str) -> Result<String, Box<Error>> {
+    pub fn format(&self, line: &str) -> Result<String, Box<dyn Error>> {
         match self.format {
             ScraperFormat::Sensision => format_warp10(line),
             ScraperFormat::Prometheus => format_prometheus(line, self.now),
@@ -28,12 +28,12 @@ impl Transcompiler {
 }
 
 /// Format Warp10 metrics from Prometheus one.
-fn format_warp10(line: &str) -> Result<String, Box<Error>> {
+fn format_warp10(line: &str) -> Result<String, Box<dyn Error>> {
     Ok(String::from(line.trim()))
 }
 
 /// Format Warp10 metrics from Prometheus one.
-fn format_prometheus(line: &str, now: i64) -> Result<String, Box<Error>> {
+fn format_prometheus(line: &str, now: i64) -> Result<String, Box<dyn Error>> {
     let line = line.trim();
 
     // Skip comments or empty line
@@ -105,13 +105,13 @@ mod tests {
     #[test]
     fn prometheus_skip_infinity() {
         let line = "f{job_id=\"123\"} +Inf";
-        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let expected: Result<String, Box<dyn Error>> = Ok(String::new());
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
 
         let line = "f{job_id=\"123\"} -Inf";
-        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let expected: Result<String, Box<dyn Error>> = Ok(String::new());
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn prometheus_skip_empty() {
         let line = "";
-        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let expected: Result<String, Box<dyn Error>> = Ok(String::new());
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn prometheus_skip_comment() {
         let line = "# HELP ...";
-        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let expected: Result<String, Box<dyn Error>> = Ok(String::new());
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
@@ -138,13 +138,13 @@ mod tests {
     #[test]
     fn prometheus_skip_nan() {
         let line = "f{job_id=\"123\"} nan";
-        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let expected: Result<String, Box<dyn Error>> = Ok(String::new());
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
 
         let line = "f{job_id=\"123\"} NaN";
-        let expected: Result<String, Box<Error>> = Ok(String::new());
+        let expected: Result<String, Box<dyn Error>> = Ok(String::new());
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
