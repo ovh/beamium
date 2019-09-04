@@ -48,9 +48,9 @@ lazy_static! {
 
 pub enum State {
     Idle,
-    Sending(Box<Future<Item = (), Error = Error> + Send>),
+    Sending(Box<dyn Future<Item = (), Error = Error> + Send>),
     Waiting,
-    Backoff(Box<Future<Item = (), Error = Error> + Send>),
+    Backoff(Box<dyn Future<Item = (), Error = Error> + Send>),
 }
 
 pub struct Sender {
