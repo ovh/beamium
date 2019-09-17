@@ -39,6 +39,7 @@ parameters:               # Parameters definitions                              
   timeout: 500            # Http timeout                                                                  (Optional, default: 500)
   router-parallel: 1      # Routing threads                                                               (Optional, default: 1)
   metrics: 127.0.0.1:9110 # Open a server on the given address and expose a prometheus /metrics endpoint  (Optional, default: none)
+  filesystem-threads: 100 # Set the maximum number of threads use for blocking treatment per scraper, sink and router (Optional, default: 100)
   backoff:                # Backoff configuration - slow down push on errors                              (Optional)
     initial: 500ms          # Initial interval                                                              (Optional, default: 500ms)
     max: 1m                 # Max interval                                                                  (Optional, default: 1m)
