@@ -51,19 +51,31 @@ impl Runner for Router {
         let executor = rt.executor();
 
         let scanner = Scanner::from((dir, self.params.scan_period.to_owned()))
-            .fold(HashSet::new(), move |acc, entries| {
+            .fold(mutex!(HashSet::new()), move |acc, entries| {
                 let paths: HashSet<PathBuf> =
                     entries.iter().fold(HashSet::new(), |mut acc, (path, _)| {
                         acc.insert(path.to_owned());
                         acc
                     });
 
-                let new: Vec<PathBuf> = paths.difference(&acc).cloned().collect();
+                let new = {
+                    let mut state = try_future!(acc.lock());
+                    let new: Vec<PathBuf> = paths.difference(&state).cloned().collect();
+                    let delete: Vec<PathBuf> = state.difference(&paths).cloned().collect();
+
+                    for path in delete {
+                        state.remove(&path);
+                    }
+
+                    new
+                };
+
                 for path in new {
                     let labels = labels.to_owned();
                     let sinks = sinks.to_owned();
                     let params = params.to_owned();
                     let epath = path.to_owned();
+                    let state = acc.to_owned();
 
                     executor.spawn(
                         Self::load(path.to_owned())
@@ -72,11 +84,21 @@ impl Runner for Router {
                             .and_then(move |_| Self::remove(path))
                             .map_err(move |err| {
                                 error!("could not process file in router"; "path" => epath.to_str(), "error" => err.to_string());
+                                let mut state = match state.lock() {
+                                    Ok(state) => state,
+                                    Err(err) => {
+                                        crit!("could not lock state in router for recovery"; "path" => epath.to_str(), "error" => err.to_string());
+                                        sleep(Duration::from_millis(100)); // Sleep the time to display the message
+                                        abort();
+                                    }
+                                };
+
+                                state.remove(&epath);
                             }),
                     );
                 }
 
-                ok::<_, Error>(paths)
+                ok::<_, Error>(acc)
             })
             .and_then(|_| ok(()))
             .map_err(|err| {
