@@ -5,9 +5,9 @@ use std::fs::Metadata;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use failure::{Error, format_err};
-use futures::{Async, Future, Poll, Stream, try_ready};
+use failure::{format_err, Error};
 use futures::future::{err, join_all, ok};
+use futures::{try_ready, Async, Future, Poll, Stream};
 use prometheus::GaugeVec;
 use tokio::fs::{metadata, read_dir, remove_file};
 use tokio::timer::Interval;
@@ -72,7 +72,7 @@ impl Stream for Scanner {
 }
 
 impl Scanner {
-    fn scan(path: PathBuf) -> impl Future<Item=HashMap<PathBuf, Metadata>, Error=Error> {
+    fn scan(path: PathBuf) -> impl Future<Item = HashMap<PathBuf, Metadata>, Error = Error> {
         read_dir(path)
             .map_err(|err| format_err!("{}", err))
             .and_then(move |entries| {
