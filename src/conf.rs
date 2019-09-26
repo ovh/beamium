@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use config::{Config, File};
-use failure::{Error, format_err, ResultExt};
+use failure::{format_err, Error, ResultExt};
 use humanize_rs::bytes::{Bytes, Unit};
 use humanize_rs::duration::parse;
 use hyper::Uri;
@@ -264,7 +264,7 @@ impl TryFrom<(String, RawScraper)> for Scraper {
             Err(format_err!(
                 "protocol is missing or incorrect, it should be one of 'http' or 'https'"
             ))
-                .with_context(|err| format!("could not parse 'url' setting, {}", err))?;
+            .with_context(|err| format!("could not parse 'url' setting, {}", err))?;
         }
 
         Ok(Self {
