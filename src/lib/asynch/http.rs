@@ -335,6 +335,10 @@ impl Payload for Body {
                         break;
                     }
 
+                    if &line == "\n" {
+                        continue;
+                    }
+
                     if !line.ends_with('\n') {
                         line += "\n";
                         line_len += "\n".len() as u64;
