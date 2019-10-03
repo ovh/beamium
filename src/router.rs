@@ -200,7 +200,7 @@ impl Router {
                 File::create(temp_file.to_owned())
                     .map_err(|err| format_err!("could not create file, {}", err))
                     .and_then(move |mut file| {
-                        file.poll_write(&body.join("\n").into_bytes())
+                        file.poll_write((body.join("\n") + "\n").as_bytes())
                             .and_then(|_| file.poll_flush())
                             .map_err(|err| format_err!("could not write into file, {}", err))
                     })

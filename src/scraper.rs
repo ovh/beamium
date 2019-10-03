@@ -238,7 +238,7 @@ impl Scraper {
                     File::create(temp_file.to_owned())
                         .and_then(move |mut file| {
                             trace!("write chunk on file"; "scraper" => name, "file" => temp_file.to_str());
-                            file.poll_write(chunk.join("\n").as_bytes())
+                            file.poll_write((chunk.join("\n") + "\n").as_bytes())
                                 .and_then(|_| file.poll_flush())
                         })
                         .and_then(move |_| {
@@ -271,7 +271,7 @@ impl Scraper {
         trace!("create tmp source file"; "scraper" => name, "file" => temp_file.to_str());
         let chunk = File::create(temp_file.to_owned())
             .and_then(move |mut file| {
-                file.poll_write(chunk.join("\n").as_bytes())
+                file.poll_write((chunk.join("\n") + "\n").as_bytes())
                     .and_then(|_| file.poll_flush())
             })
             .and_then(move |_| {
