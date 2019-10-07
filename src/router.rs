@@ -7,6 +7,7 @@ use std::process::abort;
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
+use uuid::Uuid;
 
 use failure::{format_err, Error};
 use futures::future::ok;
@@ -162,9 +163,6 @@ impl Router {
     ) -> impl Future<Item = (), Error = Error> {
         let mut bulk = vec![];
 
-        let start = time::now_utc().to_timespec();
-        let run_id = format!("{}#{}", start.sec, start.nsec);
-
         let mut idx = -1;
         for sink in sinks {
             idx += 1;
@@ -190,7 +188,9 @@ impl Router {
                 continue;
             }
 
-            let run_id = run_id.to_owned();
+            let file_uuid = Uuid::new_v4();
+            let start = time::now_utc().to_timespec();
+            let run_id = format!("{}#{}#{}", start.sec, start.nsec, file_uuid);
             let name = sink.name.to_owned();
             let dir = PathBuf::from(params.sink_dir.to_owned());
             let temp_file = dir.join(format!("{}-{}-{}.tmp", sink.name, idx, run_id.to_owned()));
@@ -200,7 +200,7 @@ impl Router {
                 File::create(temp_file.to_owned())
                     .map_err(|err| format_err!("could not create file, {}", err))
                     .and_then(move |mut file| {
-                        file.poll_write((body.join("\n") + "\n").as_bytes())
+                        file.poll_write((body.to_owned().join("\n") + "\n").as_bytes())
                             .and_then(|_| file.poll_flush())
                             .map_err(|err| format_err!("could not write into file, {}", err))
                     })
