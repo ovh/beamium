@@ -33,6 +33,7 @@ prometheus = "0.7.0"
 lazy_static = "1.4.0"
 backoff = "0.1.5"
 paw = "1.0.0"
+uuid = { version = "0.7", features = ["v4"] }
 
 [dependencies.slog]
 version = "2.5.2"
