@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
 use config::{Config, File};
@@ -13,6 +14,7 @@ use failure::{format_err, Error, ResultExt};
 use humanize_rs::bytes::{Bytes, Unit};
 use humanize_rs::duration::parse;
 use hyper::Uri;
+use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use regex::{Regex, RegexSet};
 use serde_derive::{Deserialize, Serialize};
 use std::env;
@@ -604,5 +606,86 @@ impl Conf {
             .filter(|(k, _)| k.starts_with(&prefix))
             .map(|(k, v)| ((&k.trim_start_matches(&prefix)).to_lowercase(), v))
             .collect()
+    }
+
+    pub fn watch(
+        path: Option<PathBuf>,
+    ) -> Result<
+        (
+            Sender<DebouncedEvent>,
+            Receiver<DebouncedEvent>,
+            RecommendedWatcher,
+        ),
+        Error,
+    > {
+        let (tx, rx) = channel();
+        let mut w = watcher(tx.to_owned(), Duration::from_secs(2))
+            .with_context(|err| format!("could not create watcher, {}", err))?;
+
+        match path {
+            Some(path) => {
+                w.watch(path.to_owned(), RecursiveMode::NonRecursive)
+                    .with_context(|err| {
+                        format!("could not put a watch on '{:?}', {}", path, err)
+                    })?;
+            }
+            None => {
+                let result = w
+                    .watch("/etc/beamium.d", RecursiveMode::Recursive)
+                    .with_context(|err| {
+                        format!("could not put a watch on '/etc/beamium.d', {}", err)
+                    });
+
+                if let Err(err) = result {
+                    warn!("could not put a watch"; "error" => err.to_string());
+                }
+
+                let result = w
+                    .watch("/etc/beamium", RecursiveMode::Recursive)
+                    .with_context(|err| {
+                        format!("could not put a watch on '/etc/beamium', {}", err)
+                    });
+
+                if let Err(err) = result {
+                    warn!("could not put a watch"; "error" => err.to_string());
+                }
+
+                let result = w
+                    .watch(
+                        format!("{}/.beamium.d", env!("HOME")),
+                        RecursiveMode::Recursive,
+                    )
+                    .with_context(|err| {
+                        format!(
+                            "could not put a watch on '{}/.beamium.d', {}",
+                            env!("HOME"),
+                            err
+                        )
+                    });
+
+                if let Err(err) = result {
+                    warn!("could not put a watch"; "error" => err.to_string());
+                }
+
+                let result = w
+                    .watch(
+                        format!("{}/.beamium", env!("HOME")),
+                        RecursiveMode::Recursive,
+                    )
+                    .with_context(|err| {
+                        format!(
+                            "could not put a watch on '{}/.beamium', {}",
+                            env!("HOME"),
+                            err
+                        )
+                    });
+
+                if let Err(err) = result {
+                    warn!("could not put a watch"; "error" => err.to_string());
+                }
+            }
+        }
+
+        Ok((tx, rx, w))
     }
 }
