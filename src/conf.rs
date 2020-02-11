@@ -15,6 +15,7 @@ use humanize_rs::duration::parse;
 use hyper::Uri;
 use regex::{Regex, RegexSet};
 use serde_derive::{Deserialize, Serialize};
+use std::env;
 
 use glob::glob;
 
@@ -240,10 +241,14 @@ impl TryFrom<(String, RawScraper)> for Scraper {
             Some(headers) => headers,
         };
 
-        let labels = match raw_scraper.labels {
+        let mut labels = match raw_scraper.labels {
             None => HashMap::new(),
             Some(labels) => labels,
         };
+
+        for (_, v) in labels.iter_mut() {
+            *v = replace_env(v.to_string());
+        }
 
         let pool = match raw_scraper.pool {
             Some(pool) => pool,
@@ -519,10 +524,14 @@ impl TryFrom<RawConf> for Conf {
             }
         }
 
-        let labels = match raw_config.labels {
+        let mut labels = match raw_config.labels {
             None => HashMap::new(),
             Some(map) => map,
         };
+
+        for (_, v) in labels.iter_mut() {
+            *v = replace_env(v.to_string());
+        }
 
         Ok(Self {
             scrapers,
@@ -551,5 +560,21 @@ impl Conf {
         let config = RawConf::default()?;
 
         Ok(Self::try_from(config)?)
+    }
+}
+
+fn replace_env(value: String) -> String {
+    if !value.starts_with("env:") {
+        return value;
+    }
+
+    let striped = value.trim_start_matches("env:");
+
+    return match env::var(striped) {
+        Ok(v) => v,
+        Err(_e) => {
+            striped.to_owned().push_str("_NOT_SET");
+            return striped.to_string();
+        },
     }
 }

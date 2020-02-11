@@ -79,6 +79,7 @@ scrapers:                              # Scrapers definitions (Optional)
     format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])
     labels:                            # Labels definitions           (Optional)
       label_name: label_value          # Label definition             (Required)
+      another: env:USER                # label values can be resolved from env vars
     filtered_labels:                   # filtered labels              (optional)
       - jobid                          # key label which is removed   (required)
     metrics:                           # filter fetched metrics       (optional)
@@ -109,6 +110,7 @@ Beamium can add static labels to collected metrics. A *label* is defined as foll
 ``` yaml
 labels: # Labels definitions (Optional)
   label_name: label_value # Label definition             (Required)
+  another: env:USER       # label values can be resolved from env vars
 ```
 
 #### Parameters
