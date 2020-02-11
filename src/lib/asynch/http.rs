@@ -236,7 +236,7 @@ impl Stream for Sender {
 
 impl Sender {
     fn remove(path: PathBuf) -> impl Future<Item = (), Error = Error> {
-        remove_file(path.to_owned())
+        remove_file(path)
             .map_err(|err| format_err!("{}", err))
             .and_then(|_| ok(()))
     }

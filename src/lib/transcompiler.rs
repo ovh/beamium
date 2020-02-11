@@ -68,29 +68,29 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<dyn Error>> {
     let class = String::from(parts.next().ok_or_else(|| "no_class")?);
     let class = class.trim();
     let plabels = parts.next();
-    let slabels = if plabels.is_some() {
-        let mut labels = plabels
-            .unwrap()
-            .split("\",")
-            .map(|v| v.replace("=", "%3D")) // escape
-            .map(|v| v.replace("%3D\"", "=")) // remove left double quote
-            .map(|v| v.replace("\"}", "")) // remove right double quote
-            .map(|v| v.replace(",", "%2C")) // escape
-            .map(|v| v.replace("}", "%7D")) // escape
-            .map(|v| v.replace(r"\\", r"\")) // unescape
-            .map(|v| v.replace("\\\"", "\"")) // unescape
-            .map(|v| v.replace(r"\n", "%0A")) // unescape
-            .fold(String::new(), |acc, x| {
-                // skip invalid values
-                if !x.contains('=') {
-                    return acc;
-                }
-                acc + &x + ","
-            });
-        labels.pop();
-        labels
-    } else {
-        String::new()
+    let slabels = match plabels {
+        None => String::new(),
+        Some(plabels) => {
+            let mut labels = plabels
+                .split("\",")
+                .map(|v| v.replace("=", "%3D")) // escape
+                .map(|v| v.replace("%3D\"", "=")) // remove left double quote
+                .map(|v| v.replace("\"}", "")) // remove right double quote
+                .map(|v| v.replace(",", "%2C")) // escape
+                .map(|v| v.replace("}", "%7D")) // escape
+                .map(|v| v.replace(r"\\", r"\")) // unescape
+                .map(|v| v.replace("\\\"", "\"")) // unescape
+                .map(|v| v.replace(r"\n", "%0A")) // unescape
+                .fold(String::new(), |acc, x| {
+                    // skip invalid values
+                    if !x.contains('=') {
+                        return acc;
+                    }
+                    acc + &x + ","
+                });
+            labels.pop();
+            labels
+        }
     };
 
     let class = format!("{}{{{}}}", class, slabels);

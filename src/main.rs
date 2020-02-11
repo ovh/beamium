@@ -16,7 +16,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 
-use ctrlc;
 use failure::{format_err, Error};
 use prometheus::{gather, Encoder, TextEncoder};
 use structopt::StructOpt;
@@ -265,7 +264,7 @@ fn main(opts: Opts) -> Result<(), Error> {
     }
 
     // Wait for termination signals
-    let rx = sigint.to_owned();
+    let rx = sigint;
     while rx.load(Ordering::SeqCst) {
         sleep(THREAD_SLEEP);
     }

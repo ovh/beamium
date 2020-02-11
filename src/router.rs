@@ -200,7 +200,7 @@ impl Router {
                 File::create(temp_file.to_owned())
                     .map_err(|err| format_err!("could not create file, {}", err))
                     .and_then(move |mut file| {
-                        file.poll_write((body.to_owned().join("\n") + "\n").as_bytes())
+                        file.poll_write((body.join("\n") + "\n").as_bytes())
                             .and_then(|_| file.poll_flush())
                             .map_err(|err| format_err!("could not write into file, {}", err))
                     })
@@ -220,7 +220,7 @@ impl Router {
 
     fn remove(path: PathBuf) -> impl Future<Item = (), Error = Error> {
         trace!("remove file"; "path" => path.to_str());
-        remove_file(path.to_owned())
+        remove_file(path)
             .map_err(|err| format_err!("could not remove file, {}", err))
             .and_then(|_| ok(()))
     }

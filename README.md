@@ -66,6 +66,21 @@ In addition, it will recursively discover configuration files in `beamium.d` dir
 
 Furthermore, Beamium support multiple formats for configuration files which are `hjson`, `json`, `toml`, `yaml`, `yml` or `ini`.
 
+
+Also, Beamium can be started with several labels put as env vars, they must be prefixed by `BEAMIUM_LABEL`.
+
+Ex:
+```sh
+BEAMIUM_LABEL_HOST=myhost ./beamium -v
+```
+
+This is also available per scraper
+
+Ex:
+```sh
+BEAMIUM_SCRAPPER1_LABEL_HOST=myhost ./beamium -v
+```
+
 ### Definitions
 Config is composed of four parts:
 
