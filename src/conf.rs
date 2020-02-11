@@ -250,6 +250,10 @@ impl TryFrom<(String, RawScraper)> for Scraper {
             *v = replace_env(v.to_string());
         }
 
+        for (k, v) in env_labels() {
+            labels.insert(k, v);
+        }
+
         let pool = match raw_scraper.pool {
             Some(pool) => pool,
             None => 1,
@@ -577,4 +581,22 @@ fn replace_env(value: String) -> String {
             return striped.to_string();
         },
     }
+}
+
+fn env_labels() -> HashMap<String, String> {
+    let v: HashMap<String, String> = env::vars()
+        .filter(|(k, _v)| {
+            return k.starts_with("BEAMIUM_LABEL");
+        })
+        .map(|(mut k, v)| {
+            k = k
+                .trim_start_matches("BEAMIUM_LABEL_")
+                .to_string()
+                .to_lowercase();
+
+            return (k, v)
+        })
+        .collect();
+
+    return v;
 }
