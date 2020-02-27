@@ -26,15 +26,15 @@ pub fn main() -> Result<(), Error> {
     // Generate the version file
     let mut file = File::create("src/version.rs")?;
 
-    file.write(
+    file.write_all(
         format!(
             "pub(crate) const BUILD_DATE: &str = \"{}\";\n",
             now.rfc3339()
         )
         .as_bytes(),
     )?;
-    file.write(format!("pub(crate) const GITHASH: &str = \"{}\";\n", identifier).as_bytes())?;
-    file.write(format!("pub(crate) const PROFILE: &str = \"{}\";\n", profile).as_bytes())?;
+    file.write_all(format!("pub(crate) const GITHASH: &str = \"{}\";\n", identifier).as_bytes())?;
+    file.write_all(format!("pub(crate) const PROFILE: &str = \"{}\";\n", profile).as_bytes())?;
 
     file.flush()?;
     file.sync_all()?;

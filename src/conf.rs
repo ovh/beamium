@@ -15,6 +15,7 @@ use humanize_rs::duration::parse;
 use hyper::Uri;
 use regex::{Regex, RegexSet};
 use serde_derive::{Deserialize, Serialize};
+use std::env;
 
 use glob::glob;
 
@@ -240,10 +241,26 @@ impl TryFrom<(String, RawScraper)> for Scraper {
             Some(headers) => headers,
         };
 
-        let labels = match raw_scraper.labels {
+        let mut labels = match raw_scraper.labels {
             None => HashMap::new(),
-            Some(labels) => labels,
+            Some(mut labels) => {
+                for (k, v) in labels.to_owned() {
+                    match Conf::replace_env(v.to_string()) {
+                        Some(v) => labels.insert(k, v),
+                        None => labels.remove(&k),
+                    };
+                }
+
+                labels
+            }
         };
+
+        for (k, v) in Conf::env_labels(format!(
+            "BEAMIUM_{}_LABEL_",
+            name.to_uppercase().replace("-", "_")
+        )) {
+            labels.insert(k, v);
+        }
 
         let pool = match raw_scraper.pool {
             Some(pool) => pool,
@@ -519,10 +536,23 @@ impl TryFrom<RawConf> for Conf {
             }
         }
 
-        let labels = match raw_config.labels {
+        let mut labels = match raw_config.labels {
             None => HashMap::new(),
-            Some(map) => map,
+            Some(mut labels) => {
+                for (k, v) in labels.to_owned() {
+                    match Conf::replace_env(v) {
+                        Some(v) => labels.insert(k, v),
+                        None => labels.remove(&k),
+                    };
+                }
+
+                labels
+            }
         };
+
+        for (k, v) in Conf::env_labels("BEAMIUM_LABEL_".into()) {
+            labels.insert(k, v);
+        }
 
         Ok(Self {
             scrapers,
@@ -551,5 +581,28 @@ impl Conf {
         let config = RawConf::default()?;
 
         Ok(Self::try_from(config)?)
+    }
+
+    fn replace_env(value: String) -> Option<String> {
+        if !value.starts_with("env:") {
+            return Some(value);
+        }
+
+        let striped = value.trim_start_matches("env:");
+
+        match env::var(striped) {
+            Ok(v) => Some(v),
+            Err(_) => {
+                warn!("could not retrieve environment variable '{}'", striped);
+                None
+            }
+        }
+    }
+
+    fn env_labels(prefix: String) -> HashMap<String, String> {
+        env::vars()
+            .filter(|(k, _)| k.starts_with(&prefix))
+            .map(|(k, v)| ((&k.trim_start_matches(&prefix)).to_lowercase(), v))
+            .collect()
     }
 }

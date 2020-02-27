@@ -66,6 +66,21 @@ In addition, it will recursively discover configuration files in `beamium.d` dir
 
 Furthermore, Beamium support multiple formats for configuration files which are `hjson`, `json`, `toml`, `yaml`, `yml` or `ini`.
 
+
+Also, Beamium can be started with several labels put as env vars, they must be prefixed by `BEAMIUM_LABEL`.
+
+Ex:
+```sh
+BEAMIUM_LABEL_HOST=myhost ./beamium -v
+```
+
+This is also available per scraper
+
+Ex:
+```sh
+BEAMIUM_SCRAPPER1_LABEL_HOST=myhost ./beamium -v
+```
+
 ### Definitions
 Config is composed of four parts:
 
@@ -79,6 +94,7 @@ scrapers:                              # Scrapers definitions (Optional)
     format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])
     labels:                            # Labels definitions           (Optional)
       label_name: label_value          # Label definition             (Required)
+      another: env:USER                # label values can be resolved from env vars
     filtered_labels:                   # filtered labels              (optional)
       - jobid                          # key label which is removed   (required)
     metrics:                           # filter fetched metrics       (optional)
@@ -109,6 +125,7 @@ Beamium can add static labels to collected metrics. A *label* is defined as foll
 ``` yaml
 labels: # Labels definitions (Optional)
   label_name: label_value # Label definition             (Required)
+  another: env:USER       # label values can be resolved from env vars
 ```
 
 #### Parameters
