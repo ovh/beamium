@@ -9,7 +9,8 @@ RUN apt-get update \
         && curl https://last-public-ovh-metrics.snap.mirrors.ovh.net/pub.key | apt-key add - \
         && apt-get update \
         && apt-get install -y beamium \
-        && rm -rf /var/lib/apt/lists/*
+        && rm -rf /var/lib/apt/lists/* \
+        && chown -R beamium:beamium /etc/beamium/
 USER 1000
 ADD entrypoint.sh /
 
