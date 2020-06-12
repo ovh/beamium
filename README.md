@@ -81,6 +81,12 @@ Ex:
 BEAMIUM_SCRAPPER1_LABEL_HOST=myhost ./beamium -v
 ```
 
+### Hot reload
+
+Beamium now supports hot reloading of his configuration. There is no specific thing to do to enable this feature. Actually, this support all features excepted those in relation with the logger.
+
+Besides, beamium debounced file-system event in an interval of two seconds. So, it may appears that the reload of beamium is not released at the same time of the configuration.
+
 ### Definitions
 Config is composed of four parts:
 
