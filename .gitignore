@@ -17,3 +17,6 @@ config.yaml
 /sources/
 /sinks/
 /src/version.rs
+
+### IDE ###
+.idea

@@ -58,7 +58,7 @@ pub(crate) fn version() -> Result<(), Error> {
     Ok(())
 }
 
-pub(crate) fn main(conf: Conf, sigint: Arc<AtomicBool>) -> Result<(), Error> {
+pub(crate) fn main(conf: Conf, sigint: Arc<AtomicBool>, is_started_notifier: Arc<AtomicBool>) -> Result<(), Error> {
     // -------------------------------------------------------------------------
     // Ensure that directories are presents
     if let Err(err) = create_dir_all(conf.parameters.source_dir.to_owned()) {
@@ -201,6 +201,9 @@ pub(crate) fn main(conf: Conf, sigint: Arc<AtomicBool>) -> Result<(), Error> {
         sinks.push((sink, rt));
     }
 
+    debug!("cmd::main is started");
+    is_started_notifier.store(true, Ordering::SeqCst);
+
     // Wait for termination signals
     while sigint.load(Ordering::SeqCst) {
         thread::sleep(THREAD_SLEEP);
@@ -236,5 +239,7 @@ pub(crate) fn main(conf: Conf, sigint: Arc<AtomicBool>) -> Result<(), Error> {
         }
     }
 
+    debug!("cmd::main is stopped");
+    is_started_notifier.store(false, Ordering::SeqCst);
     Ok(())
 }
