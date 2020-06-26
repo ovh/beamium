@@ -32,6 +32,9 @@ It also means that given your need, you could produce metrics directly to source
 Beamium is currently under development.
 
 ## Install
+
+### Debian
+
 We provide deb packages for Beamium!
 ```
 sudo apt-get install apt-transport-https
@@ -39,6 +42,14 @@ sudo lsb_release -a | grep Codename | awk '{print "deb https://last-public-ovh-m
 curl https://last-public-ovh-metrics.snap.mirrors.ovh.net/pub.key | sudo apt-key add -
 sudo apt-get update
 sudo apt-get install beamium
+```
+
+### Kubernetes
+
+We are providing an [example yaml](deploy/kubernetes/beamium.yaml) file to deploy Beamium within Kubernetes.
+
+```bash
+kubectl apply -f deploy/kubernetes
 ```
 
 ## Building
