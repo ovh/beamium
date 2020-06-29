@@ -19,7 +19,6 @@ data:
       log-file: /var/log/beamium/beamium.log
       source-dir: /opt/beamium/sources
       sink-dir: /opt/beamium/sinks
-...
 ---
 apiVersion: v1
 kind: Pod
@@ -37,4 +36,4 @@ spec:
     - name: config-volume
       configMap:
         name: beamium-cm
-
+...

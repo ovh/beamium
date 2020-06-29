@@ -58,7 +58,11 @@ pub(crate) fn version() -> Result<(), Error> {
     Ok(())
 }
 
-pub(crate) fn main(conf: Conf, sigint: Arc<AtomicBool>, is_started_notifier: Arc<AtomicBool>) -> Result<(), Error> {
+pub(crate) fn main(
+    conf: Conf,
+    sigint: Arc<AtomicBool>,
+    is_started_notifier: Arc<AtomicBool>,
+) -> Result<(), Error> {
     // -------------------------------------------------------------------------
     // Ensure that directories are presents
     if let Err(err) = create_dir_all(conf.parameters.source_dir.to_owned()) {

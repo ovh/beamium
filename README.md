@@ -184,7 +184,7 @@ $ beamium -t -vvvvv [--config </path/to/file>]
 This will output if the configuration is healthy and the configuration loaded.
 
 ## Metrics
-Beamium now expose metrics about his usage:
+Beamium can expose metrics about his usage:
 
 | name                     | labels       | type    | description                      |
 | ------------------------ | ------------ | ------- | -------------------------------- |
@@ -194,6 +194,7 @@ Beamium now expose metrics about his usage:
 | beamium_push_datapoints  | sink         | counter | Number of datapoints pushed      |
 | beamium_push_http_status | sink, status | counter | Push response http status code   |
 | beamium_push_errors      | sink         | counter | Number of push error             |
+| beamium_reload_count     |              | counter | Number of global reloads         |
 
 ## Contributing
 Instructions on how to contribute to Beamium are available on the [Contributing][Contributing] page.

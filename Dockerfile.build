@@ -18,8 +18,9 @@ RUN groupadd -r beamium && \
   useradd -r -g beamium -d ${HOME} beamium && \
   chown -R beamium:beamium ${HOME}
 
+# curl is useful to be able to curl Beamium's metrics
 RUN apt update -y && \
-  apt install -y ca-certificates procps && \
+  apt install -y ca-certificates curl && \
   rm -rf /var/lib/apt/lists/*
 
 COPY config.yml /etc/beamium/config.yml

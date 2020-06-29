@@ -17,11 +17,20 @@ use std::thread;
 use std::time::Duration;
 
 use failure::{format_err, Error};
+use prometheus::Counter;
 
 use crate::cmd::{version, Opts};
 use crate::conf::Conf;
-use crate::version::PROFILE;
 use crate::constants::THREAD_SLEEP;
+use crate::version::PROFILE;
+
+lazy_static! {
+    static ref BEAMIUM_RELOAD_COUNT: Counter = register_counter!(opts!(
+        "beamium_reload_count",
+        "Number of time Beamium was reloaded"
+    ))
+    .expect("create metric: 'beamium_reload_count'");
+}
 
 #[macro_use]
 pub(crate) mod lib;
@@ -152,10 +161,12 @@ fn main(opts: Opts) -> Result<(), Error> {
             .map(|event| {
                 debug!("received a watch event '{:#?}'", event);
                 event
-            }).count();
+            })
+            .count();
 
         if watch_event_count > 0 {
-            info!("received a batch of {} watch events, reloading configuration", watch_event_count);
+            debug!("received a batch of {} watch events", watch_event_count);
+            info!("reload configuration");
             signal.store(false, Ordering::SeqCst);
             if handler.join().is_err() {
                 crit!("could not stop main thread");
@@ -193,6 +204,7 @@ fn main(opts: Opts) -> Result<(), Error> {
             while !cmd_main_is_ready.load(Ordering::SeqCst) {
                 thread::sleep(THREAD_SLEEP);
             }
+            BEAMIUM_RELOAD_COUNT.inc();
         }
     }
 
