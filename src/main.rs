@@ -17,10 +17,20 @@ use std::thread;
 use std::time::Duration;
 
 use failure::{format_err, Error};
+use prometheus::Counter;
 
 use crate::cmd::{version, Opts};
 use crate::conf::Conf;
+use crate::constants::THREAD_SLEEP;
 use crate::version::PROFILE;
+
+lazy_static! {
+    static ref BEAMIUM_RELOAD_COUNT: Counter = register_counter!(opts!(
+        "beamium_reload_count",
+        "Number of time Beamium was reloaded"
+    ))
+    .expect("create metric: 'beamium_reload_count'");
+}
 
 #[macro_use]
 pub(crate) mod lib;
@@ -56,6 +66,8 @@ fn main(opts: Opts) -> Result<(), Error> {
     // -------------------------------------------------------------------------
     // Manage termination signals from the system
     let sigint = arc!(AtomicBool::new(false));
+    // used to notify the launcher of cmd::main that it is running
+    let cmd_main_is_ready = arc!(AtomicBool::new(false));
     let tx = sigint.to_owned();
     let result = ctrlc::set_handler(move || {
         tx.store(true, Ordering::SeqCst);
@@ -119,13 +131,18 @@ fn main(opts: Opts) -> Result<(), Error> {
     // Start beamium scraper, sinks and metrics
     let signal = arc!(AtomicBool::new(true));
     let rx = signal.to_owned();
+    let main_is_ready = cmd_main_is_ready.to_owned();
     let mut handler = thread::spawn(move || {
-        if let Err(err) = cmd::main(conf, rx) {
+        if let Err(err) = cmd::main(conf, rx, main_is_ready) {
             crit!("{}", err);
             thread::sleep(Duration::from_millis(100)); // Sleep the time to display the message
             abort();
         }
     });
+
+    while !cmd_main_is_ready.load(Ordering::SeqCst) {
+        thread::sleep(THREAD_SLEEP);
+    }
 
     // Wait for termination signals
     loop {
@@ -138,8 +155,17 @@ fn main(opts: Opts) -> Result<(), Error> {
             break;
         }
 
-        if let Ok(event) = watcher_rx.try_recv() {
-            debug!("received a watcher event {:#?}", event);
+        // retrieve all pending events from watch
+        let watch_event_count = watcher_rx
+            .try_iter()
+            .map(|event| {
+                debug!("received a watch event '{:#?}'", event);
+                event
+            })
+            .count();
+
+        if watch_event_count > 0 {
+            debug!("received a batch of {} watch events", watch_event_count);
             info!("reload configuration");
             signal.store(false, Ordering::SeqCst);
             if handler.join().is_err() {
@@ -149,6 +175,7 @@ fn main(opts: Opts) -> Result<(), Error> {
 
             let path = opts.config.to_owned();
             let tx = signal.to_owned();
+            let cmd_ready = cmd_main_is_ready.to_owned();
 
             handler = thread::spawn(move || {
                 let result = match path {
@@ -166,12 +193,18 @@ fn main(opts: Opts) -> Result<(), Error> {
                 };
 
                 tx.store(true, Ordering::SeqCst);
-                if let Err(err) = cmd::main(conf, tx) {
+                if let Err(err) = cmd::main(conf, tx, cmd_ready) {
                     crit!("{}", err);
                     thread::sleep(Duration::from_millis(100)); // Sleep the time to display the message
                     abort();
                 }
             });
+
+            // waiting for cmd::main to be in a started state
+            while !cmd_main_is_ready.load(Ordering::SeqCst) {
+                thread::sleep(THREAD_SLEEP);
+            }
+            BEAMIUM_RELOAD_COUNT.inc();
         }
     }
 

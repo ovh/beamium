@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beamium-cm
+data:
+  config.yaml: |
+    scrapers:
+      # scraping itself for metrics
+      self:
+        url: http://127.0.0.1:9110/metrics
+        period: 60s
+        format: prometheus
+
+    # Do not forget to configure your sink here
+    sinks:
+
+    parameters:
+      metrics: 127.0.0.1:9110
+      log-file: /var/log/beamium/beamium.log
+      source-dir: /opt/beamium/sources
+      sink-dir: /opt/beamium/sinks
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: beamium
+spec:
+  containers:
+    - name: beamium
+      image: ovhcom/beamium
+      imagePullPolicy: Always
+      volumeMounts:
+        - name: config-volume
+          mountPath: /etc/beamium
+  volumes:
+    - name: config-volume
+      configMap:
+        name: beamium-cm
+...

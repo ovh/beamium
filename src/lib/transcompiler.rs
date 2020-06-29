@@ -1,6 +1,6 @@
-use time::now_utc;
-
 use std::error::Error;
+
+use time::now_utc;
 
 use crate::conf::ScraperFormat;
 

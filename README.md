@@ -32,6 +32,9 @@ It also means that given your need, you could produce metrics directly to source
 Beamium is currently under development.
 
 ## Install
+
+### Debian
+
 We provide deb packages for Beamium!
 ```
 sudo apt-get install apt-transport-https
@@ -39,6 +42,14 @@ sudo lsb_release -a | grep Codename | awk '{print "deb https://last-public-ovh-m
 curl https://last-public-ovh-metrics.snap.mirrors.ovh.net/pub.key | sudo apt-key add -
 sudo apt-get update
 sudo apt-get install beamium
+```
+
+### Kubernetes
+
+We are providing an [example yaml](deploy/kubernetes/beamium.yaml) file to deploy Beamium within Kubernetes.
+
+```bash
+kubectl apply -f deploy/kubernetes
 ```
 
 ## Building
@@ -173,7 +184,7 @@ $ beamium -t -vvvvv [--config </path/to/file>]
 This will output if the configuration is healthy and the configuration loaded.
 
 ## Metrics
-Beamium now expose metrics about his usage:
+Beamium can expose metrics about his usage:
 
 | name                     | labels       | type    | description                      |
 | ------------------------ | ------------ | ------- | -------------------------------- |
@@ -183,6 +194,7 @@ Beamium now expose metrics about his usage:
 | beamium_push_datapoints  | sink         | counter | Number of datapoints pushed      |
 | beamium_push_http_status | sink, status | counter | Push response http status code   |
 | beamium_push_errors      | sink         | counter | Number of push error             |
+| beamium_reload_count     |              | counter | Number of global reloads         |
 
 ## Contributing
 Instructions on how to contribute to Beamium are available on the [Contributing][Contributing] page.
