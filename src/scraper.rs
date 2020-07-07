@@ -182,7 +182,7 @@ impl Scraper {
         let labels = labels.join(",");
         for line in body.lines() {
             let mut line = try_future!(transcompiler.format(line));
-            if line.is_empty() {
+            if line.is_empty() || line.starts_with('#') {
                 continue;
             }
 
