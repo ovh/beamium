@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
-use failure::Error;
-use futures::future::ok;
+use failure::{format_err, Error};
+use futures::future::{ExecuteErrorKind, Executor};
 use futures::Stream;
 use prometheus::CounterVec;
 use tokio::fs::remove_file;
@@ -78,7 +78,7 @@ impl Runner for Sink {
                 self.conf.to_owned(),
                 self.params.to_owned(),
             ))
-            .for_each(move |_| ok(()))
+            .for_each(move |_| future::ok(()))
             .map_err(move |err| {
                 crit!("could not send data"; "sink" => name.as_str(), "error" => err.to_string());
                 sleep(Duration::from_millis(100)); // Sleep the time to display the message
@@ -127,11 +127,22 @@ impl Runner for Sink {
                         .with_label_values(&[name.as_str()])
                         .inc();
 
-                    executor.spawn(
+                    let result = executor.execute(
                         remove_file(path.to_owned())
-                            .and_then(|_| ok(()))
+                            .and_then(|_| future::ok(()))
                             .map_err(move |err| { error!("could not remove file"; "error" => err.to_string(), "sink" => name.as_str(), "path" => path.to_str()); })
-                    )
+                    );
+
+                    if let Err(err) = result {
+                        match err.kind() {
+                            ExecuteErrorKind::Shutdown => {
+                                warn!("could not execute the future, runtime is closed");
+                            },
+                            _ => {
+                                return future::err(format_err!("could not execute future, got runtime error"));
+                            }
+                        }
+                    }
                 }
 
                 // Retrieve files that are not expired
@@ -189,19 +200,30 @@ impl Runner for Sink {
                             .with_label_values(&[name.as_str()])
                             .inc();
 
-                        executor.spawn(
+                        let result = executor.execute(
                             remove_file(path.to_owned())
-                                .and_then(|_| ok(()))
+                                .and_then(|_| future::ok(()))
                                 .map_err(move |err| { error!("could not remove file"; "error" => err.to_string(), "sink" => name.as_str(), "path" => path.to_str()); })
                         );
+
+                        if let Err(err) = result {
+                            match err.kind() {
+                                ExecuteErrorKind::Shutdown => {
+                                    warn!("could not execute the future, runtime is closed");
+                                },
+                                _ => {
+                                    return future::err(format_err!("could not execute future, got runtime error"));
+                                }
+                            }
+                        }
 
                         current_size -= meta.len();
                     }
                 }
 
-                ok::<_, Error>(paths)
+                future::ok(paths)
             })
-            .and_then(|_| ok(()))
+            .and_then(|_| future::ok(()))
             .map_err(move |err| {
                 crit!("could not scan sink directory"; "sink" => name.as_str(), "dir" => dir.as_str(), "error" => err.to_string());
                 sleep(Duration::from_millis(100)); // Sleep the time to display the message

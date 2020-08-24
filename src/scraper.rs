@@ -9,7 +9,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use failure::{format_err, Error};
-use futures::future::{err, ok};
+use futures::future::{ExecuteErrorKind, Executor};
 use futures::{Future, Stream};
 use hyper::client::connect::dns::GaiResolver;
 use hyper::client::HttpConnector;
@@ -118,10 +118,20 @@ impl Runner for Scraper {
                     });
 
                 // Spawn the request on executor to send it
-                executor.spawn(process);
+                if let Err(err) = executor.execute(process) {
+                    match err.kind() {
+                        ExecuteErrorKind::Shutdown => {
+                            warn!("could not execute the future, runtime is closed");
+                        },
+                        _ => {
+                            return future::err(format_err!("could not execute future, got runtime error"));
+                        }
+                    }
+                }
+
 
                 // return that everything is good
-                ok(())
+                future::ok(())
             })
             .map_err(move |err| {
                 crit!("could not handle ticker"; "error" => err.to_string(), "scraper" => name);
@@ -152,16 +162,21 @@ impl Scraper {
             .and_then(|response| {
                 let status = response.status();
                 if !status.is_success() {
-                    return err(format_err!("http request failed, got: {}", status.as_u16()));
+                    return future::err(format_err!(
+                        "http request failed, got: {}",
+                        status.as_u16()
+                    ));
                 }
 
-                ok(response
-                    .into_body()
-                    .concat2()
-                    .map_err(|err| format_err!("{}", err)))
+                future::ok(
+                    response
+                        .into_body()
+                        .concat2()
+                        .map_err(|err| format_err!("{}", err)),
+                )
             })
             .flatten()
-            .and_then(|body| ok(String::from_utf8_lossy(&body).to_string()))
+            .and_then(|body| future::ok(String::from_utf8_lossy(&body).to_string()))
     }
 
     /// Process scraper's data in order to add/remove labels and format time series into sensision
@@ -200,7 +215,7 @@ impl Scraper {
             lines.push(line);
         }
 
-        ok(lines)
+        future::ok(lines)
     }
 
     /// Write time series into the disk
@@ -248,7 +263,7 @@ impl Scraper {
                             debug!("rotate source file"; "scraper" => name2, "old" => old.to_str(), "new" => new.to_str());
                             rename(old, new)
                         })
-                        .and_then(|_| ok(()))
+                        .and_then(|_| future::ok(()))
                         .map_err(|err| format_err!("{}", err)),
                 );
 
@@ -281,9 +296,9 @@ impl Scraper {
                 debug!("rotate file"; "scraper" => name2, "old" => old.to_str(), "new" => new.to_str());
                 rename(old, new)
             })
-            .and_then(|_| ok(()))
+            .and_then(|_| future::ok(()))
             .map_err(|err| format_err!("{}", err));
 
-        bulk.join(chunk).and_then(|_| ok(()))
+        bulk.join(chunk).and_then(|_| future::ok(()))
     }
 }

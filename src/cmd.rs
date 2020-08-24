@@ -221,18 +221,18 @@ pub(crate) fn main(
         }
     }
 
-    // Shutdown router runtime
-    debug!("shutdown router's runtime");
-    if router.1.shutdown_now().wait().is_err() {
-        error!("could not shutdown the router's runtime");
-    }
-
     // Shutdown runtime for each sinks
     for (sink, rt) in sinks {
         debug!("shutdown sink's runtime"; "sink" => sink.name());
         if rt.shutdown_now().wait().is_err() {
             error!("could not shutdown the runtime"; "sink" => sink.name());
         }
+    }
+
+    // Shutdown router runtime
+    debug!("shutdown router's runtime");
+    if router.1.shutdown_now().wait().is_err() {
+        error!("could not shutdown the router's runtime");
     }
 
     // Shutdown the metrics server
