@@ -10,7 +10,8 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use failure::{format_err, Error};
-use futures::future::ok;
+use futures::future;
+use futures::future::{ExecuteErrorKind, Executor};
 use tokio::fs::remove_file;
 use tokio::fs::{rename, File};
 use tokio::prelude::*;
@@ -82,7 +83,7 @@ impl Runner for Router {
                     let epath = path.to_owned();
                     let state = acc.to_owned();
 
-                    executor.spawn(
+                    let result = executor.execute(
                         Self::load(path.to_owned())
                             .and_then(move |lines| Self::process(&lines, &labels))
                             .and_then(move |lines| Self::write(&lines, &params, &sinks))
@@ -101,11 +102,22 @@ impl Runner for Router {
                                 state.remove(&epath);
                             }),
                     );
+
+                    if let Err(err) = result {
+                        match err.kind() {
+                            ExecuteErrorKind::Shutdown => {
+                                warn!("could not execute the future, runtime is closed");
+                            },
+                            _ => {
+                                return future::err(format_err!("could not execute future, got runtime error"));
+                            }
+                        }
+                    }
                 }
 
-                ok::<_, Error>(acc)
+                future::ok(acc)
             })
-            .and_then(|_| ok(()))
+            .and_then(|_| future::ok(()))
             .map_err(|err| {
                 crit!("could not scan source directory"; "error" => err.to_string());
                 sleep(Duration::from_millis(100)); // Sleep the time to display the message
@@ -129,7 +141,7 @@ impl Router {
                 try_future!(file
                     .read_to_string(&mut buf)
                     .map_err(|err| format_err!("could not read file, {}", err)));
-                ok(buf.split('\n').map(String::from).collect())
+                future::ok(buf.split('\n').map(String::from).collect())
             })
     }
 
@@ -153,7 +165,7 @@ impl Router {
             }
         }
 
-        ok(body)
+        future::ok(body)
     }
 
     fn write(
@@ -215,13 +227,13 @@ impl Router {
             )
         }
 
-        future::join_all(bulk).and_then(|_| ok(()))
+        future::join_all(bulk).and_then(|_| future::ok(()))
     }
 
     fn remove(path: PathBuf) -> impl Future<Item = (), Error = Error> {
         trace!("remove file"; "path" => path.to_str());
         remove_file(path)
             .map_err(|err| format_err!("could not remove file, {}", err))
-            .and_then(|_| ok(()))
+            .and_then(|_| future::ok(()))
     }
 }

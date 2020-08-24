@@ -156,13 +156,7 @@ fn main(opts: Opts) -> Result<(), Error> {
         }
 
         // retrieve all pending events from watch
-        let watch_event_count = watcher_rx
-            .try_iter()
-            .map(|event| {
-                debug!("received a watch event '{:#?}'", event);
-                event
-            })
-            .count();
+        let watch_event_count = watcher_rx.try_iter().count();
 
         if watch_event_count > 0 {
             debug!("received a batch of {} watch events", watch_event_count);
