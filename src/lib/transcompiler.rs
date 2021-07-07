@@ -2,6 +2,9 @@ use std::error::Error;
 
 use time::now_utc;
 
+extern crate urlencoding;
+use urlencoding::encode;
+
 use crate::conf::ScraperFormat;
 
 #[derive(Clone, Debug)]
@@ -66,21 +69,23 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<dyn Error>> {
     // Format class
     let mut parts = class.splitn(2, '{');
     let class = String::from(parts.next().ok_or_else(|| "no_class")?);
-    let class = class.trim();
+    let class = encode(class.trim());
     let plabels = parts.next();
     let slabels = match plabels {
         None => String::new(),
         Some(plabels) => {
             let mut labels = plabels
-                .split("\",")
-                .map(|v| v.replace("=", "%3D")) // escape
-                .map(|v| v.replace("%3D\"", "=")) // remove left double quote
-                .map(|v| v.replace("\"}", "")) // remove right double quote
-                .map(|v| v.replace(",", "%2C")) // escape
-                .map(|v| v.replace("}", "%7D")) // escape
-                .map(|v| v.replace(r"\\", r"\")) // unescape
-                .map(|v| v.replace("\\\"", "\"")) // unescape
-                .map(|v| v.replace(r"\n", "%0A")) // unescape
+                .split(",")
+                .map(|v| v.replace("=\"", "="))
+                .map(|v| v.replace("\"}", ""))
+                .map(|v| v.replace("\"", ""))
+                .map(|v| {
+                    let kv: Vec<&str>= v.split('=').collect();
+                    let mut encoded = encode(kv[0]);
+                    encoded.push_str("=");
+                    encoded.push_str(& encode(kv[1]));
+                    encoded
+                })
                 .fold(String::new(), |acc, x| {
                     // skip invalid values
                     if !x.contains('=') {
