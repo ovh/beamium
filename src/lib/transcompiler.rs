@@ -74,26 +74,32 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<dyn Error>> {
     let slabels = match plabels {
         None => String::new(),
         Some(plabels) => {
-            let mut labels = plabels
-                .split(",")
-                .map(|v| v.replace("=\"", "="))
-                .map(|v| v.replace("\"}", ""))
-                .map(|v| v.replace("\"", ""))
-                .map(|v| {
-                    let kv: Vec<&str>= v.split('=').collect();
-                    let mut encoded = encode(kv[0]);
-                    encoded.push_str("=");
-                    encoded.push_str(& encode(kv[1]));
-                    encoded
-                })
-                .fold(String::new(), |acc, x| {
-                    // skip invalid values
-                    if !x.contains('=') {
-                        return acc;
+            let mut labels = String::from("");
+            let mut in_label = false;
+            let mut buffer = String::from("");
+            for c in plabels.chars() {
+                if c == '"' {
+                    in_label = !in_label;
+                    continue;
+                }
+
+                if !in_label {
+                    if c == '=' || c == ',' || c == '}' {
+                        labels.push_str(& encode(&buffer));
+                        buffer = String::from("");
+
+                        if c == ',' {
+                            labels.push(',');
+                        }
+                        if c == '=' {
+                            labels.push('=');
+                        }
+                        continue;
                     }
-                    acc + &x + ","
-                });
-            labels.pop();
+                }
+
+                buffer.push(c);                
+            }
             labels
         }
     };
