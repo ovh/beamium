@@ -74,9 +74,9 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<dyn Error>> {
     let slabels = match plabels {
         None => String::new(),
         Some(plabels) => {
-            let mut labels = String::from("");
+            let mut labels = String::new();
             let mut in_label = false;
-            let mut buffer = String::from("");
+            let mut buffer = String::new();
             for c in plabels.chars() {
                 if c == '"' {
                     in_label = !in_label;
@@ -86,7 +86,7 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<dyn Error>> {
                 if !in_label {
                     if c == '=' || c == ',' || c == '}' {
                         labels.push_str(& encode(&buffer));
-                        buffer = String::from("");
+                        buffer = String::new();
 
                         if c == ',' {
                             labels.push(',');
