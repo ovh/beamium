@@ -200,6 +200,8 @@ fn main(opts: Opts) -> Result<(), Error> {
             }
             BEAMIUM_RELOAD_COUNT.inc();
         }
+
+        thread::sleep(THREAD_SLEEP);
     }
 
     info!("Beamium halted!");
