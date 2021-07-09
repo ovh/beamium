@@ -160,4 +160,37 @@ mod tests {
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
     }
+
+    #[test]
+    fn prometheus_urlencoding() {
+        let line = "f{job_id=\"1%3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%253} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"1%3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%253} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"1%3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%253} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"1 3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%203} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"1+3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%2B3} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+    }
 }
