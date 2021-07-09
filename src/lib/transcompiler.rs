@@ -2,7 +2,6 @@ use std::error::Error;
 
 use time::now_utc;
 
-extern crate urlencoding;
 use urlencoding::encode;
 
 use crate::conf::ScraperFormat;
