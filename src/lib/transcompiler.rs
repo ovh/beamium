@@ -2,6 +2,8 @@ use std::error::Error;
 
 use time::now_utc;
 
+use urlencoding::encode;
+
 use crate::conf::ScraperFormat;
 
 #[derive(Clone, Debug)]
@@ -66,29 +68,37 @@ fn format_prometheus(line: &str, now: i64) -> Result<String, Box<dyn Error>> {
     // Format class
     let mut parts = class.splitn(2, '{');
     let class = String::from(parts.next().ok_or_else(|| "no_class")?);
-    let class = class.trim();
+    let class = encode(class.trim());
     let plabels = parts.next();
     let slabels = match plabels {
         None => String::new(),
         Some(plabels) => {
-            let mut labels = plabels
-                .split("\",")
-                .map(|v| v.replace("=", "%3D")) // escape
-                .map(|v| v.replace("%3D\"", "=")) // remove left double quote
-                .map(|v| v.replace("\"}", "")) // remove right double quote
-                .map(|v| v.replace(",", "%2C")) // escape
-                .map(|v| v.replace("}", "%7D")) // escape
-                .map(|v| v.replace(r"\\", r"\")) // unescape
-                .map(|v| v.replace("\\\"", "\"")) // unescape
-                .map(|v| v.replace(r"\n", "%0A")) // unescape
-                .fold(String::new(), |acc, x| {
-                    // skip invalid values
-                    if !x.contains('=') {
-                        return acc;
+            let mut labels = String::new();
+            let mut in_label = false;
+            let mut buffer = String::new();
+            for c in plabels.chars() {
+                if c == '"' {
+                    in_label = !in_label;
+                    continue;
+                }
+
+                if !in_label {
+                    if c == '=' || c == ',' || c == '}' {
+                        labels.push_str(& encode(&buffer));
+                        buffer = String::new();
+
+                        if c == ',' {
+                            labels.push(',');
+                        }
+                        if c == '=' {
+                            labels.push('=');
+                        }
+                        continue;
                     }
-                    acc + &x + ","
-                });
-            labels.pop();
+                }
+
+                buffer.push(c);                
+            }
             labels
         }
     };
@@ -145,6 +155,39 @@ mod tests {
 
         let line = "f{job_id=\"123\"} NaN";
         let expected: Result<String, Box<dyn Error>> = Ok(String::new());
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+    }
+
+    #[test]
+    fn prometheus_urlencoding() {
+        let line = "f{job_id=\"1%3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%253} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"1%3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%253} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"1%3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%253} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"1 3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%203} 1"));
+        let result = super::format_prometheus(line, 1);
+        assert_eq!(expected.is_ok(), result.is_ok());
+        assert_eq!(expected.unwrap(), result.unwrap());
+
+        let line = "f{job_id=\"1+3\"} 1";
+        let expected: Result<String, Box<dyn Error>> = Ok(String::from("1// f{job_id=1%2B3} 1"));
         let result = super::format_prometheus(line, 1);
         assert_eq!(expected.is_ok(), result.is_ok());
         assert_eq!(expected.unwrap(), result.unwrap());
