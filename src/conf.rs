@@ -25,6 +25,8 @@ use glob::glob;
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub(crate) struct RawScraper {
     pub url: String,
+    pub ssl_accept_invalid_certs: Option<bool>,
+    pub ssl_accept_invalid_hostnames: Option<bool>,
     pub period: String,
     pub format: Option<String>,
     pub metrics: Option<Vec<String>>,
@@ -209,6 +211,8 @@ impl TryFrom<&str> for ScraperFormat {
 pub struct Scraper {
     pub name: String,
     pub url: Uri,
+    pub ssl_accept_invalid_certs: bool,
+    pub ssl_accept_invalid_hostnames: bool,
     pub period: Duration,
     pub format: ScraperFormat,
     pub metrics: Option<RegexSet>,
@@ -224,6 +228,16 @@ impl TryFrom<(String, RawScraper)> for Scraper {
     fn try_from(value: (String, RawScraper)) -> Result<Self, Self::Error> {
         let name = value.0;
         let raw_scraper = value.1;
+
+        let ssl_accept_invalid_certs = match raw_scraper.ssl_accept_invalid_certs {
+            None => false,
+            Some(ssl_accept_invalid_certs) => ssl_accept_invalid_certs,
+        };
+
+        let ssl_accept_invalid_hostnames = match raw_scraper.ssl_accept_invalid_hostnames {
+            None => false,
+            Some(ssl_accept_invalid_hostnames) => ssl_accept_invalid_hostnames,
+        };
 
         let metrics = match raw_scraper.metrics {
             Some(ref patterns) => Some(RegexSet::new(patterns).with_context(|err| {
@@ -292,6 +306,8 @@ impl TryFrom<(String, RawScraper)> for Scraper {
                 .url
                 .parse::<Uri>()
                 .with_context(|err| format!("could not parse 'url' setting, {}", err))?,
+            ssl_accept_invalid_certs,
+            ssl_accept_invalid_hostnames,
             period,
             format: ScraperFormat::try_from(format.as_str())
                 .with_context(|err| format!("could not parse 'format' setting, {}", err))?,

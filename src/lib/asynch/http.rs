@@ -16,7 +16,7 @@ use hyper::body::{Chunk, Payload};
 use hyper::client::connect::dns::GaiResolver;
 use hyper::client::HttpConnector;
 use hyper::{Client, Method, Request};
-use hyper_rustls::HttpsConnector;
+use hyper_tls::HttpsConnector;
 use prometheus::CounterVec;
 use tokio::fs::remove_file;
 use tokio::prelude::*;
@@ -82,7 +82,7 @@ impl
         let client = Client::builder()
             .keep_alive(conf.keep_alive)
             .keep_alive_timeout(conf.keep_alive_timeout)
-            .build(HttpsConnector::new(NUMBER_DNS_WORKER_THREADS));
+            .build(HttpsConnector::new(NUMBER_DNS_WORKER_THREADS).unwrap());
 
         let mut backoff = ExponentialBackoff::default();
 

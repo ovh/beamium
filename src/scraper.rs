@@ -14,7 +14,8 @@ use futures::{Future, Stream};
 use hyper::client::connect::dns::GaiResolver;
 use hyper::client::HttpConnector;
 use hyper::{Body, Client, Method, Request};
-use hyper_rustls::HttpsConnector;
+use hyper_tls::HttpsConnector;
+use native_tls::TlsConnector;
 use prometheus::CounterVec;
 use time::now_utc;
 use tokio::fs::{rename, File};
@@ -55,11 +56,17 @@ pub struct Scraper {
 impl From<(conf::Scraper, conf::Parameters)> for Scraper {
     fn from(tuple: (conf::Scraper, conf::Parameters)) -> Self {
         let (conf, params) = tuple;
+        // allow untrusted SSL'ed targets
+        let tlsconf = TlsConnector::builder()
+                      .danger_accept_invalid_certs(conf.ssl_accept_invalid_certs)
+                      .danger_accept_invalid_hostnames(conf.ssl_accept_invalid_hostnames)
+                      .build();
+        let mut httpconn = HttpConnector::new(NUMBER_DNS_WORKER_THREADS);
+        httpconn.enforce_http(false);
         let client = Client::builder()
             .keep_alive(true)
             .keep_alive_timeout(params.timeout)
-            .build(HttpsConnector::new(NUMBER_DNS_WORKER_THREADS));
-
+            .build(HttpsConnector::from((httpconn, tlsconf.unwrap())));
         Self {
             conf: arc!(conf),
             params: arc!(params),
