@@ -29,7 +29,8 @@ It also means that given your need, you could produce metrics directly to source
     $ TS=`date +%s` && echo $TS"000000// metrics{} T" >> /opt/beamium/data/sources/prefix-$TS.metrics
 
 ## Status
-Beamium is currently under development.
+
+Beamium is not under development. We are moving toward [prometheus in agent mode](https://github.com/prometheus/prometheus)
 
 ## Install
 
