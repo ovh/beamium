@@ -1,6 +1,8 @@
 scrapers:                              # Scrapers definitions (Optional)
   scraper1:                            # Source name                  (Required)
     url: http://127.0.0.1:9100/metrics # Prometheus endpoint          (Required)
+    ssl_accept_invalid_certs: true     # Trust invalid certificates   (Optional, default: false)
+    ssl_accept_invalid_hostnames: true # Trust invalid hostnames      (Optional, default: false)
     period: 60s                        # Polling interval             (Required)
     format: prometheus                 # Polling format               (Optional, default: prometheus, value: [prometheus, sensision])
     labels:                            # Labels definitions           (Optional)

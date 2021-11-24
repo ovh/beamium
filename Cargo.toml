@@ -1,6 +1,6 @@
 [package]
 name = "beamium"
-version = "2.0.8"
+version = "2.0.9"
 edition = "2018"
 build = "build.rs"
 authors = [
@@ -24,7 +24,8 @@ serde = "1.0.111"
 serde_derive = "1.0.111"
 regex = "1.3.9"
 hyper = "=0.12.35"
-hyper-rustls = "=0.17.1"
+hyper-tls = "=0.3.2"
+native-tls = "=0.2.2"
 tokio = "=0.1.22"
 time = "=0.1.42"
 crossbeam = "0.7.3"
